@@ -1,8 +1,20 @@
 'use strict';
 
-const DEFAULT_WINDOW_MS = 120000;
+// Десять минут вместо двух: вопрос, который обсуждают до сих пор, мог
+// прозвучать давно, а выпадал он молча. Реальный предел объёма — maxChars.
+const DEFAULT_WINDOW_MS = 600000;
 const DEFAULT_MAX_CHARS = 6000;
 const MIN_OVERLAP_WORDS = 2;
+// Пауза, после которой реплика считается новым куском разговора.
+const PAUSE_MS = 45000;
+const RECENT_MS = 45000;
+
+function ageLabel(ageMs) {
+    if (ageMs < RECENT_MS) {
+        return 'только что';
+    }
+    return `${Math.max(1, Math.round(ageMs / 60000))} мин назад`;
+}
 
 function normalizeWord(word) {
     return word.toLowerCase().replace(/[.,!?…:;"'«»()-]/g, '');
@@ -60,12 +72,41 @@ class RollingTranscript {
     prune(now = Date.now()) {
         const cutoff = now - this.windowMs;
         this.entries = this.entries.filter(entry => entry.at >= cutoff);
+
+        // Обрезаем целыми репликами: резать строку посередине слова значит
+        // отдать модели обрубок без начала фразы.
+        let total = this.entries.reduce((sum, entry) => sum + entry.text.length + 1, 0);
+        while (this.entries.length > 1 && total > this.maxChars) {
+            total -= this.entries[0].text.length + 1;
+            this.entries.shift();
+        }
     }
 
     text(now = Date.now()) {
         this.prune(now);
-        const joined = this.entries.map(entry => entry.text).join(' ');
-        return joined.length > this.maxChars ? joined.slice(joined.length - this.maxChars) : joined;
+        return this.entries.map(entry => entry.text).join(' ');
+    }
+
+    // Для запроса к модели: давность видна явно, иначе трёхминутной давности
+    // вопрос неотличим от прозвучавшего только что.
+    formatted(now = Date.now()) {
+        this.prune(now);
+        if (this.entries.length === 0) {
+            return '';
+        }
+
+        const groups = [];
+        for (const entry of this.entries) {
+            const last = groups.at(-1);
+            if (!last || entry.at - last.at >= PAUSE_MS) {
+                groups.push({ at: entry.at, parts: [entry.text] });
+            } else {
+                last.at = entry.at;
+                last.parts.push(entry.text);
+            }
+        }
+
+        return groups.map(group => `[${ageLabel(now - group.at)}] ${group.parts.join(' ')}`).join('\n');
     }
 
     clear() {
@@ -75,5 +116,7 @@ class RollingTranscript {
 
 module.exports = {
     DEFAULT_WINDOW_MS,
+    PAUSE_MS,
+    ageLabel,
     RollingTranscript,
 };

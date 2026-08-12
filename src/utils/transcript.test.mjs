@@ -104,7 +104,66 @@ describe('RollingTranscript', () => {
         expect(buffer.text()).toBe('');
     });
 
-    it('окно по умолчанию — две минуты', () => {
-        expect(new RollingTranscript().windowMs).toBe(120000);
+    it('окно по умолчанию — десять минут', () => {
+        expect(new RollingTranscript().windowMs).toBe(600000);
+    });
+
+    // Раньше лимит резал строку посередине слова; выбрасывать надо целыми
+    // репликами, начиная со старых.
+    it('при переполнении выбрасывает старые реплики целиком', () => {
+        const buffer = new RollingTranscript({ maxChars: 20 });
+        buffer.add('первая реплика', 1000);
+        buffer.add('вторая', 2000);
+        buffer.add('третья', 3000);
+        expect(buffer.text(4000)).toBe('вторая третья');
+    });
+});
+
+describe('RollingTranscript.formatted', () => {
+    it('пустой буфер даёт пустую строку', () => {
+        expect(new RollingTranscript().formatted()).toBe('');
+    });
+
+    // Модель должна видеть, насколько реплика свежая: вопрос трёхминутной
+    // давности и вопрос, прозвучавший только что, требуют разного отношения.
+    it('помечает давность первой реплики', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('о сроках', 0);
+        expect(buffer.formatted(180000)).toBe('[3 мин назад] о сроках');
+    });
+
+    it('свежую реплику помечает как только что', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('вопрос', 100000);
+        expect(buffer.formatted(110000)).toBe('[только что] вопрос');
+    });
+
+    it('реплики подряд не разбивает метками', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('первая', 100000);
+        buffer.add('вторая', 110000);
+        expect(buffer.formatted(115000)).toBe('[только что] первая вторая');
+    });
+
+    it('после долгой паузы ставит новую метку', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('старое', 0);
+        buffer.add('новое', 300000);
+        const text = buffer.formatted(300000);
+        expect(text).toBe('[5 мин назад] старое\n[только что] новое');
+    });
+
+    it('метка меняется вместе с временем', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('реплика', 0);
+        expect(buffer.formatted(30000)).toBe('[только что] реплика');
+        expect(buffer.formatted(60000)).toBe('[1 мин назад] реплика');
+    });
+
+    it('выпавшие по окну реплики в разметку не попадают', () => {
+        const buffer = new RollingTranscript({ windowMs: 60000 });
+        buffer.add('древнее', 0);
+        buffer.add('свежее', 100000);
+        expect(buffer.formatted(100000)).toBe('[только что] свежее');
     });
 });

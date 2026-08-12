@@ -1116,6 +1116,21 @@ export class OverlayApp extends LitElement {
                             : ''
                     }
                     ${this.preferences.listenInSession ? this.renderWhisperField() : ''}
+                    ${
+                        this.preferences.listenInSession
+                            ? html`<div class="field">
+                                  <label>Помнить разговор</label>
+                                  <select @change=${e => this.setPreference('transcriptWindowMinutes', Number(e.target.value))}>
+                                      ${[2, 5, 10, 30].map(
+                                      minutes =>
+                                          html`<option value=${minutes} ?selected=${minutes === Number(this.preferences.transcriptWindowMinutes)}>
+                                              ${minutes} мин
+                                          </option>`
+                                  )}
+                                  </select>
+                              </div>`
+                            : ''
+                    }
 
                     <div class="row">
                         <div class="field">

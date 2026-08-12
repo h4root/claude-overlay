@@ -6,7 +6,7 @@ const storage = require('../storage');
 const { buildRequest, normalizeApiError, maskKey, MODELS } = require('./claude-client');
 const { buildSystemPrompt } = require('./prompts');
 const { RequestGate } = require('./request-gate');
-const { getTranscript, clearTranscript } = require('./audio');
+const { getTranscriptForRequest, clearTranscript } = require('./audio');
 
 const HISTORY_LIMIT = 12;
 
@@ -91,7 +91,7 @@ async function ask({ images = [], prompt = '', useTranscript = false }) {
             systemPrompt: buildSystemPrompt(preferences.profile, preferences.customPrompt),
             prompt: prompt || preferences.defaultPrompt,
             images,
-            transcript: useTranscript ? getTranscript() : '',
+            transcript: useTranscript ? getTranscriptForRequest() : '',
             history: historyWithoutImages(),
         });
     } catch (error) {

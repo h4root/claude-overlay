@@ -31,8 +31,21 @@ function modelsDir() {
     return path.join(storage.getConfigDir(), 'models');
 }
 
+function syncWindow() {
+    const minutes = Number(storage.getPreferences().transcriptWindowMinutes) || 10;
+    transcriptBuffer.windowMs = minutes * 60000;
+}
+
 function getTranscript() {
+    syncWindow();
     return transcriptBuffer.text();
+}
+
+// В запрос уходит текст с пометками давности: без них реплика десятиминутной
+// давности неотличима от прозвучавшей только что.
+function getTranscriptForRequest() {
+    syncWindow();
+    return transcriptBuffer.formatted();
 }
 
 function clearTranscript() {
@@ -172,6 +185,7 @@ function setupAudioIpcHandlers() {
 
 module.exports = {
     setMainWindow,
+    getTranscriptForRequest,
     setupAudioIpcHandlers,
     getTranscript,
     clearTranscript,

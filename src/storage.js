@@ -29,6 +29,7 @@ const DEFAULT_PREFERENCES = {
     listenInSession: true,
     captureDisplay: 'primary',
     transcriptWithScreenshot: false,
+    transcriptWindowMinutes: 10,
     voicePrompt: 'Ответь на то, что сейчас прозвучало в разговоре.',
 };
 
