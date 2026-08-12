@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            http-equiv="content-security-policy"
+            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'"
+        />
+        <title>Claude Overlay</title>
+        <style>
+            :root {
+                --text-primary: #f2f2f2;
+                --text-secondary: #9a9a9a;
+                --text-muted: #5a5a5a;
+                --accent: #3b82f6;
+                --accent-hover: #2563eb;
+                --success: #22c55e;
+                --warning: #d4a017;
+                --danger: #ef4444;
+                --font: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+                --font-mono: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+                --font-size-xs: 11px;
+                --font-size-sm: 13px;
+                --font-size-base: 14px;
+            }
+
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+                background: transparent;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            ::-webkit-scrollbar {
+                width: 6px;
+            }
+            ::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.18);
+                border-radius: 3px;
+            }
+
+            /* Раскладку задаёт сам компонент через :host. Правило типа из этого
+               документа перебило бы его — поэтому здесь только высота. */
+            overlay-app {
+                height: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <script src="assets/marked-4.3.0.min.js"></script>
+        <script src="assets/highlight-11.9.0.min.js"></script>
+        <script src="assets/katex/katex.min.js"></script>
+        <script src="assets/katex/auto-render.min.js"></script>
+        <script src="utils/renderer.js"></script>
+
+        <overlay-app></overlay-app>
+
+        <script type="module" src="components/OverlayApp.js"></script>
+    </body>
+</html>
