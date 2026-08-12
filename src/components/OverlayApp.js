@@ -1122,11 +1122,11 @@ export class OverlayApp extends LitElement {
                                   <label>Помнить разговор</label>
                                   <select @change=${e => this.setPreference('transcriptWindowMinutes', Number(e.target.value))}>
                                       ${[2, 5, 10, 30].map(
-                                      minutes =>
-                                          html`<option value=${minutes} ?selected=${minutes === Number(this.preferences.transcriptWindowMinutes)}>
-                                              ${minutes} мин
-                                          </option>`
-                                  )}
+                                          minutes =>
+                                              html`<option value=${minutes} ?selected=${minutes === Number(this.preferences.transcriptWindowMinutes)}>
+                                                  ${minutes} мин
+                                              </option>`
+                                      )}
                                   </select>
                               </div>`
                             : ''
