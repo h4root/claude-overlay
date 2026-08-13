@@ -1,15 +1,23 @@
 import { LitElement, html, css } from '../assets/lit-core-2.7.4.min.js';
+import { icon, controlStyles, switchRow, selectRow } from './ui.js';
+
+const TABS = [
+    { id: 'session', icon: 'session', label: 'Сессия' },
+    { id: 'hotkeys', icon: 'hotkeys', label: 'Хоткеи' },
+    { id: 'settings', icon: 'settings', label: 'Настройки' },
+    { id: 'history', icon: 'history', label: 'История' },
+];
 
 const PROFILES = [
-    { id: 'meeting', label: 'Совещание' },
-    { id: 'interview', label: 'Собеседование' },
-    { id: 'freeform', label: 'Свободный' },
+    ['meeting', 'Совещание'],
+    ['interview', 'Собеседование'],
+    ['freeform', 'Свободный'],
 ];
 
 const QUALITIES = [
-    { id: 'low', label: 'Низкое (дешевле)' },
-    { id: 'medium', label: 'Среднее' },
-    { id: 'high', label: 'Высокое (мелкий текст)' },
+    ['low', 'Низкое — дешевле'],
+    ['medium', 'Среднее'],
+    ['high', 'Высокое — мелкий текст'],
 ];
 
 const LANGUAGES = [
@@ -24,9 +32,31 @@ const FONT_SIZES = [
     ['large', 'Крупный'],
 ];
 
+const MEMORY_MINUTES = [
+    ['2', '2 минуты'],
+    ['5', '5 минут'],
+    ['10', '10 минут'],
+    ['30', '30 минут'],
+];
+
+const CORNERS = [
+    ['bottom-right', 'Снизу справа'],
+    ['bottom-left', 'Снизу слева'],
+    ['top-right', 'Сверху справа'],
+    ['top-left', 'Сверху слева'],
+];
+
+const PROXY_SCHEMES = [
+    ['socks5', 'socks5'],
+    ['socks4', 'socks4'],
+    ['http', 'http'],
+    ['https', 'https'],
+];
+
 export class OverlayApp extends LitElement {
     static properties = {
         view: { state: true },
+        tab: { state: true },
         loaded: { state: true },
         models: { state: true },
         config: { state: true },
@@ -58,7 +88,6 @@ export class OverlayApp extends LitElement {
         recordingAction: { state: true },
         displays: { state: true },
         pastSessions: { state: true },
-        testRun: { state: true },
     };
 
     static externalStyles = html`
@@ -66,394 +95,420 @@ export class OverlayApp extends LitElement {
         <link rel="stylesheet" href="assets/katex/katex.min.css" />
     `;
 
-    static styles = css`
-        :host {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            font-family: var(--font);
-            font-size: var(--font-size-base);
-            color: var(--text-primary);
-            border-radius: 12px;
-            overflow: hidden;
-            background: rgba(10, 10, 10, var(--overlay-alpha, 0.75));
-            backdrop-filter: blur(18px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        /* При click-through окно не принимает клики — без метки это выглядит поломкой. */
-        :host(.click-through) {
-            border-style: dashed;
-            border-color: var(--warning);
-        }
-
-        header {
-            -webkit-app-region: drag;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-            flex: 0 0 auto;
-        }
-        header select,
-        header button,
-        header .dot {
-            -webkit-app-region: no-drag;
-        }
-
-        .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            flex: 0 0 auto;
-            cursor: help;
-        }
-        .dot.ok {
-            background: var(--success);
-        }
-        .dot.warn {
-            background: var(--warning);
-        }
-        .dot.fail {
-            background: var(--danger);
-        }
-        .dot.busy {
-            background: var(--warning);
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            50% {
-                opacity: 0.3;
+    static styles = [
+        controlStyles,
+        css`
+            :host {
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                font-family: var(--font);
+                font-size: var(--font-size-base);
+                color: var(--text-primary);
+                border-radius: 12px;
+                overflow: hidden;
+                background: rgba(10, 10, 10, var(--overlay-alpha, 0.75));
+                backdrop-filter: blur(18px);
+                border: 1px solid rgba(255, 255, 255, 0.08);
             }
-        }
 
-        select,
-        input,
-        textarea,
-        button {
-            font-family: inherit;
-            font-size: var(--font-size-xs);
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            padding: 4px 6px;
-        }
-        button {
-            cursor: pointer;
-        }
-        button:hover {
-            background: rgba(255, 255, 255, 0.12);
-        }
-        button[disabled] {
-            opacity: 0.4;
-            cursor: default;
-        }
-        button.primary {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #fff;
-        }
-        button.primary:hover {
-            background: var(--accent-hover);
-        }
-        button.big {
-            padding: 8px;
-            font-size: var(--font-size-sm);
-        }
+            /* При click-through окно не принимает клики — без метки это выглядит поломкой. */
+            :host(.click-through) {
+                border-style: dashed;
+                border-color: var(--warning);
+            }
 
-        .spacer {
-            flex: 1;
-        }
+            header {
+                -webkit-app-region: drag;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 9px 11px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+                flex: 0 0 auto;
+            }
+            header select,
+            header button,
+            header .dot {
+                -webkit-app-region: no-drag;
+            }
+            header .title {
+                font-size: var(--font-size-sm);
+                color: var(--text-secondary);
+            }
 
-        main {
-            flex: 1;
-            overflow-y: auto;
-            padding: 12px 14px;
-            line-height: 1.55;
-        }
-        main.small {
-            font-size: 12px;
-        }
-        main.large {
-            font-size: 16px;
-        }
-        main :first-child {
-            margin-top: 0;
-        }
-        main pre {
-            background: rgba(0, 0, 0, 0.5);
-            padding: 10px;
-            border-radius: 8px;
-            overflow-x: auto;
-        }
-        main code {
-            font-family: var(--font-mono);
-            font-size: 0.9em;
-        }
-        main :not(pre) > code {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 1px 4px;
-            border-radius: 4px;
-        }
-        main table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 8px 0;
-            font-size: 0.92em;
-        }
-        main th,
-        main td {
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            padding: 4px 7px;
-            text-align: left;
-        }
-        main th {
-            background: rgba(255, 255, 255, 0.07);
-            font-weight: 600;
-        }
-        main blockquote {
-            margin: 8px 0;
-            padding-left: 10px;
-            border-left: 2px solid rgba(255, 255, 255, 0.2);
-            color: var(--text-secondary);
-        }
-        main h1,
-        main h2,
-        main h3 {
-            font-size: 1.05em;
-            margin: 10px 0 4px;
-        }
-        main ul,
-        main ol {
-            margin: 6px 0;
-            padding-left: 20px;
-        }
-        main hr {
-            border: none;
-            border-top: 1px solid rgba(255, 255, 255, 0.12);
-            margin: 10px 0;
-        }
-        /* Длинная выключная формула не должна распирать окно по горизонтали. */
-        main .katex-display {
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 2px 0;
-        }
+            .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: var(--text-muted);
+                flex: 0 0 auto;
+                cursor: help;
+            }
+            .dot.ok {
+                background: var(--success);
+            }
+            .dot.warn {
+                background: var(--warning);
+            }
+            .dot.fail {
+                background: var(--danger);
+            }
+            .dot.busy {
+                background: var(--warning);
+                animation: pulse 1s infinite;
+            }
+            @keyframes pulse {
+                50% {
+                    opacity: 0.3;
+                }
+            }
 
-        .error {
-            color: var(--danger);
-            font-size: var(--font-size-sm);
-        }
-        .cost {
-            flex: 0 0 auto;
-            color: var(--text-muted);
-            font-size: var(--font-size-xs);
-            font-family: var(--font-mono);
-        }
+            select,
+            input,
+            textarea,
+            button {
+                font-family: inherit;
+                font-size: var(--font-size-xs);
+                color: var(--text-primary);
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 6px;
+                padding: 5px 7px;
+            }
+            button {
+                cursor: pointer;
+            }
+            button:hover {
+                background: rgba(255, 255, 255, 0.12);
+            }
+            button[disabled] {
+                opacity: 0.4;
+                cursor: default;
+            }
+            button.primary {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+            }
+            button.primary:hover {
+                background: var(--accent-hover);
+            }
+            button.big {
+                padding: 9px;
+                font-size: var(--font-size-sm);
+            }
 
-        .ghost {
-            flex: 0 0 auto;
-            color: var(--warning);
-            font-size: var(--font-size-xs);
-        }
+            .spacer {
+                flex: 1;
+            }
 
-        footer {
-            flex: 0 0 auto;
-            display: flex;
-            gap: 6px;
-            padding: 8px 10px;
-            border-top: 1px solid rgba(255, 255, 255, 0.07);
-        }
-        footer input {
-            flex: 1;
-        }
+            /* ── экран подготовки ─────────────────────────────────────── */
 
-        .hints {
-            flex: 0 0 auto;
-            padding: 5px 12px 8px;
-            color: var(--text-muted);
-            font-size: 10.5px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px 12px;
-        }
-        .hints kbd {
-            font-family: var(--font-mono);
-            color: var(--text-secondary);
-        }
+            .body {
+                flex: 1;
+                display: flex;
+                min-height: 0;
+            }
 
-        .transcript {
-            flex: 0 0 auto;
-            padding: 6px 12px;
-            border-top: 1px solid rgba(255, 255, 255, 0.07);
-            color: var(--text-secondary);
-            font-size: var(--font-size-xs);
-            line-height: 1.4;
-            display: flex;
-            gap: 6px;
-        }
-        .transcript .tag {
-            color: var(--danger);
-            flex: 0 0 auto;
-        }
-        .transcript .body {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
+            nav {
+                flex: 0 0 auto;
+                width: 152px;
+                padding: 10px 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                border-right: 1px solid rgba(255, 255, 255, 0.07);
+                overflow-y: auto;
+            }
+            nav button {
+                display: flex;
+                align-items: center;
+                gap: 9px;
+                width: 100%;
+                padding: 7px 9px;
+                background: transparent;
+                border: none;
+                border-radius: 7px;
+                color: var(--text-secondary);
+                font-size: var(--font-size-sm);
+                text-align: left;
+            }
+            nav button:hover {
+                background: rgba(255, 255, 255, 0.06);
+                color: var(--text-primary);
+            }
+            nav button[aria-current='true'] {
+                background: rgba(255, 255, 255, 0.1);
+                color: var(--text-primary);
+            }
 
-        .popover {
-            position: absolute;
-            top: 30px;
-            left: 8px;
-            z-index: 10;
-            width: 270px;
-            padding: 8px 10px;
-            border-radius: 8px;
-            background: rgba(20, 20, 20, 0.97);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            font-size: var(--font-size-xs);
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .popover .line {
-            display: flex;
-            gap: 6px;
-            align-items: flex-start;
-        }
-        .popover .mark {
-            flex: 0 0 auto;
-            width: 14px;
-        }
-        .popover .mark.ok {
-            color: var(--success);
-        }
-        .popover .mark.warn {
-            color: var(--warning);
-        }
-        .popover .mark.fail {
-            color: var(--danger);
-        }
-        .popover .mark.off {
-            color: var(--text-muted);
-        }
-        .popover .name {
-            color: var(--text-primary);
-        }
-        .popover .detail {
-            color: var(--text-secondary);
-        }
+            .pane {
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            .pane .scroll {
+                flex: 1;
+                overflow-y: auto;
+                padding: 14px 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+            }
+            .pane .actions {
+                flex: 0 0 auto;
+                padding: 10px 16px 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.07);
+                display: flex;
+                gap: 8px;
+            }
+            .pane .actions > * {
+                flex: 1;
+            }
 
-        .setup {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .field label {
-            font-size: var(--font-size-xs);
-            color: var(--text-secondary);
-        }
-        .field textarea {
-            min-height: 56px;
-            resize: vertical;
-        }
-        .row {
-            display: flex;
-            gap: 8px;
-        }
-        .row > * {
-            flex: 1;
-        }
-        .checkbox {
-            flex-direction: row;
-            align-items: center;
-            gap: 6px;
-        }
-        .checkbox input {
-            flex: 0 0 auto;
-        }
-        .inline {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
-        .inline input {
-            flex: 1;
-        }
-        .note {
-            font-size: 10.5px;
-            color: var(--text-muted);
-        }
-        .note.ok {
-            color: var(--success);
-        }
-        .note.fail {
-            color: var(--danger);
-        }
+            .group {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .group > .head {
+                font-size: 10.5px;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--text-muted);
+            }
+            .card {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                padding: 11px 12px;
+                border-radius: 9px;
+                background: rgba(255, 255, 255, 0.035);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
 
-        .model-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .model-row .grow {
-            flex: 1;
-        }
-        button.broken {
-            border-color: var(--danger);
-            color: var(--danger);
-        }
-        .popover-inline {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            padding: 6px 8px;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.04);
-            font-size: var(--font-size-xs);
-        }
-        .popover-inline .line {
-            display: flex;
-            gap: 6px;
-            align-items: flex-start;
-        }
-        .popover-inline .mark {
-            flex: 0 0 auto;
-            width: 12px;
-        }
-        .popover-inline .mark.ok {
-            color: var(--success);
-        }
-        .popover-inline .mark.fail {
-            color: var(--danger);
-        }
-        .popover-inline .mark.wait,
-        .popover-inline .mark.off {
-            color: var(--text-muted);
-        }
-        .popover-inline .detail {
-            color: var(--text-secondary);
-        }
-        .model-row small {
-            color: var(--text-muted);
-            font-size: 10px;
-        }
-    `;
+            .list-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .list-row .grow {
+                flex: 1;
+                min-width: 0;
+                font-size: var(--font-size-sm);
+            }
+            .list-row small {
+                color: var(--text-muted);
+                font-size: 10px;
+            }
+            .list-row button.broken {
+                border-color: var(--danger);
+                color: var(--danger);
+            }
+
+            .empty {
+                color: var(--text-muted);
+                font-size: var(--font-size-sm);
+            }
+
+            /* Окно тянут за угол: узкая ширина не должна ломать раскладку. */
+            @media (max-width: 620px) {
+                nav {
+                    width: 46px;
+                    align-items: center;
+                }
+                nav button {
+                    justify-content: center;
+                    padding: 8px;
+                }
+                nav button span {
+                    display: none;
+                }
+            }
+            @media (max-width: 460px) {
+                .row {
+                    flex-direction: column;
+                }
+                .pane .scroll {
+                    padding: 12px;
+                }
+            }
+
+            /* ── окно сессии ──────────────────────────────────────────── */
+
+            main {
+                flex: 1;
+                overflow-y: auto;
+                padding: 12px 14px;
+                line-height: 1.55;
+            }
+            main.small {
+                font-size: 12px;
+            }
+            main.large {
+                font-size: 16px;
+            }
+            main :first-child {
+                margin-top: 0;
+            }
+            main pre {
+                background: rgba(0, 0, 0, 0.5);
+                padding: 10px;
+                border-radius: 8px;
+                overflow-x: auto;
+            }
+            main code {
+                font-family: var(--font-mono);
+                font-size: 0.9em;
+            }
+            main :not(pre) > code {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 1px 4px;
+                border-radius: 4px;
+            }
+            main table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 8px 0;
+                font-size: 0.92em;
+            }
+            main th,
+            main td {
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                padding: 4px 7px;
+                text-align: left;
+            }
+            main th {
+                background: rgba(255, 255, 255, 0.07);
+                font-weight: 600;
+            }
+            main blockquote {
+                margin: 8px 0;
+                padding-left: 10px;
+                border-left: 2px solid rgba(255, 255, 255, 0.2);
+                color: var(--text-secondary);
+            }
+            main h1,
+            main h2,
+            main h3 {
+                font-size: 1.05em;
+                margin: 10px 0 4px;
+            }
+            main ul,
+            main ol {
+                margin: 6px 0;
+                padding-left: 20px;
+            }
+            main hr {
+                border: none;
+                border-top: 1px solid rgba(255, 255, 255, 0.12);
+                margin: 10px 0;
+            }
+            /* Длинная выключная формула не должна распирать окно по горизонтали. */
+            main .katex-display {
+                overflow-x: auto;
+                overflow-y: hidden;
+                padding: 2px 0;
+            }
+
+            .error {
+                color: var(--danger);
+                font-size: var(--font-size-sm);
+            }
+            .cost {
+                flex: 0 0 auto;
+                color: var(--text-muted);
+                font-size: var(--font-size-xs);
+                font-family: var(--font-mono);
+            }
+            .ghost {
+                flex: 0 0 auto;
+                color: var(--warning);
+                font-size: var(--font-size-xs);
+            }
+
+            footer {
+                flex: 0 0 auto;
+                display: flex;
+                gap: 6px;
+                padding: 8px 10px;
+                border-top: 1px solid rgba(255, 255, 255, 0.07);
+            }
+            footer input {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .transcript {
+                flex: 0 0 auto;
+                padding: 6px 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.07);
+                color: var(--text-secondary);
+                font-size: var(--font-size-xs);
+                line-height: 1.4;
+                display: flex;
+                gap: 6px;
+            }
+            .transcript .tag {
+                color: var(--danger);
+                flex: 0 0 auto;
+            }
+            .transcript .body {
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+
+            .popover {
+                position: absolute;
+                top: 32px;
+                left: 10px;
+                z-index: 10;
+                width: 270px;
+                padding: 8px 10px;
+                border-radius: 8px;
+                background: rgba(20, 20, 20, 0.97);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                font-size: var(--font-size-xs);
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+            .popover .line {
+                display: flex;
+                gap: 6px;
+                align-items: flex-start;
+            }
+            .popover .mark {
+                flex: 0 0 auto;
+                width: 14px;
+            }
+            .popover .mark.ok {
+                color: var(--success);
+            }
+            .popover .mark.warn {
+                color: var(--warning);
+            }
+            .popover .mark.fail {
+                color: var(--danger);
+            }
+            .popover .mark.off {
+                color: var(--text-muted);
+            }
+            .popover .detail {
+                color: var(--text-secondary);
+            }
+        `,
+    ];
 
     constructor() {
         super();
         this.view = 'setup';
+        this.tab = 'session';
         this.loaded = false;
         this.models = [];
         this.config = { model: 'claude-sonnet-5', effort: 'medium' };
@@ -485,9 +540,7 @@ export class OverlayApp extends LitElement {
         this.recordingAction = '';
         this.displays = 1;
         this.pastSessions = [];
-        this.testRun = null;
         this.unsubscribes = [];
-        // Перетаскивание ползунка даёт десятки событий — на диск должно уйти одно.
         this.savePreferenceSoon = null;
     }
 
@@ -499,9 +552,9 @@ export class OverlayApp extends LitElement {
         this.proxyDraft = { ...this.config.proxy };
         this.baseUrlDraft = this.config.baseUrl || '';
         this.preferences = await window.overlay.storage.getPreferences();
-        const loaded = await window.overlay.keybinds.load();
-        this.keybinds = loaded.keybinds;
-        this.keybindFailed = loaded.failed || [];
+        const loadedKeys = await window.overlay.keybinds.load();
+        this.keybinds = loadedKeys.keybinds;
+        this.keybindFailed = loadedKeys.failed || [];
         this.hasApiKey = await window.overlay.storage.hasApiKey();
         this.whisperModels = await window.overlay.whisper.models();
         this.displays = await window.overlay.displays();
@@ -510,7 +563,7 @@ export class OverlayApp extends LitElement {
         this.applyTransparency();
 
         // Форму рендерим только после загрузки состояния: если отрисовать её
-        // раньше, Lit больше не переустановит .value у select и range.
+        // раньше, Lit больше не переустановит значения полей.
         this.loaded = true;
 
         const on = window.overlay.on;
@@ -521,6 +574,11 @@ export class OverlayApp extends LitElement {
             on('shortcut:scroll-up', () => this.scrollAnswer(-120)),
             on('shortcut:scroll-down', () => this.scrollAnswer(120)),
             on('shortcut:panic', () => this.wipe()),
+            on('shortcut:listen', () => this.toggleListening()),
+            on('shortcut:toggle-hints', () => this.toggleHints()),
+            on('click-through-toggled', enabled => {
+                this.clickThrough = enabled;
+            }),
             on('power:suspend', () => {
                 if (this.listening) {
                     window.overlay.listen.stop();
@@ -532,10 +590,6 @@ export class OverlayApp extends LitElement {
                 this.listening = false;
                 await this.openSetup();
                 this.error = 'Компьютер уходил в сон — начни сессию заново.';
-            }),
-            on('shortcut:listen', () => this.toggleListening()),
-            on('click-through-toggled', enabled => {
-                this.clickThrough = enabled;
             }),
             on('audio:tick', payload => {
                 this.lastChunkAt = payload.at;
@@ -597,12 +651,12 @@ export class OverlayApp extends LitElement {
         });
     }
 
-    get voiceModel() {
-        return this.models.find(model => model.id === this.config.voiceModel) || { efforts: [] };
-    }
-
     get currentModel() {
         return this.models.find(model => model.id === this.config.model) || { efforts: [] };
+    }
+
+    get voiceModel() {
+        return this.models.find(model => model.id === this.config.voiceModel) || { efforts: [] };
     }
 
     scrollAnswer(delta) {
@@ -637,8 +691,8 @@ export class OverlayApp extends LitElement {
         this.savePreferenceSoon(key, value);
     }
 
-    async onModelChange(event) {
-        const model = this.models.find(candidate => candidate.id === event.target.value);
+    async onModelChange(value) {
+        const model = this.models.find(candidate => candidate.id === value);
         await this.setConfig('model', model.id);
         // Уровень эффорта у моделей разный: несовместимый выбор отвергается API.
         if (!model.efforts.includes(this.config.effort)) {
@@ -652,6 +706,47 @@ export class OverlayApp extends LitElement {
         this.hasApiKey = await window.overlay.storage.hasApiKey();
         this.apiKeyDraft = '';
         this.keyCheck = null;
+    }
+
+    async testKey() {
+        this.keyCheck = { pending: true };
+        const result = await window.overlay.testKey();
+        this.keyCheck = result.success ? { ok: true, model: result.model } : { ok: false, message: result.message };
+    }
+
+    async saveBaseUrl() {
+        this.baseUrlError = '';
+        try {
+            await window.overlay.storage.setBaseUrl(this.baseUrlDraft);
+            this.config = await window.overlay.storage.getConfig();
+            // Адрес сменился — прошлая проверка ключа больше ничего не значит.
+            this.keyCheck = null;
+        } catch (error) {
+            this.baseUrlError = error.message;
+        }
+    }
+
+    async saveProxy() {
+        this.proxyError = '';
+        try {
+            await window.overlay.storage.setProxy(this.proxyDraft);
+            this.config = await window.overlay.storage.getConfig();
+            this.keyCheck = null;
+        } catch (error) {
+            this.proxyError = error.message;
+        }
+    }
+
+    async downloadWhisper(id) {
+        this.downloading = { ...this.downloading, [id]: 0 };
+        const result = await window.overlay.whisper.download(id);
+        const { [id]: finished, ...rest } = this.downloading;
+        this.downloading = rest;
+        if (!result.success) {
+            this.transcriptError = result.error;
+            return;
+        }
+        this.whisperModels = await window.overlay.whisper.models();
     }
 
     startRecording(action) {
@@ -677,9 +772,6 @@ export class OverlayApp extends LitElement {
             this.keyListener = null;
         }
         this.recordingAction = '';
-        this.displays = 1;
-        this.pastSessions = [];
-        this.testRun = null;
     }
 
     async applyKeybind(action, accelerator) {
@@ -693,137 +785,6 @@ export class OverlayApp extends LitElement {
         const result = await window.overlay.keybinds.save({});
         this.keybinds = result.keybinds;
         this.keybindFailed = result.failed || [];
-    }
-
-    // Пробный прогон до встречи: проверяет ровно тот путь, которым потом
-    // пойдёт работа, и показывает время и цену круга.
-    async runTestPass() {
-        const steps = [
-            { id: 'key', label: 'Ключ', state: 'wait', detail: '' },
-            { id: 'screen', label: 'Экран', state: 'wait', detail: '' },
-            { id: 'sound', label: 'Звук', state: 'wait', detail: '' },
-            { id: 'round', label: 'Полный круг', state: 'wait', detail: '' },
-        ];
-        const update = (id, state, detail) => {
-            this.testRun = { running: true, steps: steps.map(s => (s.id === id ? { ...s, state, detail } : s)) };
-            Object.assign(
-                steps.find(s => s.id === id),
-                { state, detail }
-            );
-        };
-        this.testRun = { running: true, steps };
-
-        const key = await window.overlay.testKey();
-        update('key', key.success ? 'ok' : 'fail', key.success ? `ответила ${key.model}` : key.message);
-
-        let image = null;
-        try {
-            image = await window.overlay.captureScreen();
-            this.screenOk = true;
-            update('screen', 'ok', `${image.width}×${image.height}, ${Math.round(image.data.length / 1365)} КБ`);
-        } catch (error) {
-            this.screenOk = false;
-            update('screen', 'fail', error.message);
-        }
-
-        if (!this.preferences.listenInSession) {
-            update('sound', 'off', 'выключен для этой сессии');
-        } else {
-            try {
-                if (!this.listening) {
-                    await this.toggleListening();
-                }
-                const heard = await this.waitForAudioTick(12000);
-                update('sound', heard ? 'ok' : 'fail', heard ? 'окна звука приходят' : 'за 12 с не пришло ни одного окна');
-            } catch (error) {
-                update('sound', 'fail', error.message);
-            }
-        }
-
-        if (key.success && image) {
-            const before = window.overlay.cost.total().dollars;
-            const startedAt = Date.now();
-            await window.overlay.ask({ images: [image], prompt: 'Ответь одним предложением: что видно на экране?' });
-            const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-            const spent = window.overlay.cost.total().dollars - before;
-            const ok = !this.error;
-            update('round', ok ? 'ok' : 'fail', ok ? `${seconds} с, ${window.overlay.cost.format(spent)}` : this.error);
-            // Пробный вопрос не должен остаться в истории рабочего диалога.
-            await window.overlay.resetConversation('main');
-        } else {
-            update('round', 'fail', 'нечего отправлять: нет ключа или снимка');
-        }
-
-        this.testRun = { running: false, steps };
-    }
-
-    waitForAudioTick(timeoutMs) {
-        return new Promise(resolve => {
-            if (this.lastChunkAt && Date.now() - this.lastChunkAt < 15000) {
-                resolve(true);
-                return;
-            }
-            const started = Date.now();
-            const timer = setInterval(() => {
-                if (this.lastChunkAt && this.lastChunkAt >= started) {
-                    clearInterval(timer);
-                    resolve(true);
-                } else if (Date.now() - started > timeoutMs) {
-                    clearInterval(timer);
-                    resolve(false);
-                }
-            }, 400);
-        });
-    }
-
-    async saveBaseUrl() {
-        this.baseUrlError = '';
-        try {
-            await window.overlay.storage.setBaseUrl(this.baseUrlDraft);
-            this.config = await window.overlay.storage.getConfig();
-            // Адрес сменился — прошлая проверка ключа больше ничего не значит.
-            this.keyCheck = null;
-        } catch (error) {
-            this.baseUrlError = error.message;
-        }
-    }
-
-    async saveProxy() {
-        this.proxyError = '';
-        this.baseUrlDraft = '';
-        this.baseUrlError = '';
-        this.keybindFailed = [];
-        this.recordingAction = '';
-        this.displays = 1;
-        this.pastSessions = [];
-        this.testRun = null;
-        try {
-            await window.overlay.storage.setProxy(this.proxyDraft);
-            this.config = await window.overlay.storage.getConfig();
-            this.keyCheck = null;
-        } catch (error) {
-            this.proxyError = error.message;
-        }
-    }
-
-    async testKey() {
-        this.keyCheck = { pending: true };
-        const result = await window.overlay.testKey();
-        this.keyCheck = result.success ? { ok: true, model: result.model } : { ok: false, message: result.message };
-    }
-
-    async downloadWhisper(id) {
-        this.downloading = { ...this.downloading, [id]: 0 };
-        const result = await window.overlay.whisper.download(id);
-        const { [id]: finished, ...rest } = this.downloading;
-        this.downloading = rest;
-        if (!result.success) {
-            this.transcriptError = result.error;
-            return;
-        }
-        this.whisperModels = await window.overlay.whisper.models();
-        this.displays = await window.overlay.displays();
-        this.pastSessions = await window.overlay.session.list(5);
     }
 
     async startSession() {
@@ -852,6 +813,10 @@ export class OverlayApp extends LitElement {
             imageQuality: this.preferences.imageQuality,
         });
 
+        if (this.preferences.hintsVisible) {
+            await window.overlay.hints.show();
+        }
+
         await window.overlay.window.setMode('session');
         this.view = 'session';
         this.starting = false;
@@ -860,9 +825,20 @@ export class OverlayApp extends LitElement {
     async openSetup() {
         await window.overlay.session.finish();
         this.pastSessions = await window.overlay.session.list(5);
+        await window.overlay.hints.hide();
         await window.overlay.voice.hide();
         await window.overlay.window.setMode('setup');
         this.view = 'setup';
+    }
+
+    async toggleHints() {
+        const visible = !this.preferences.hintsVisible;
+        await this.setPreference('hintsVisible', visible);
+        if (visible && this.view === 'session') {
+            await window.overlay.hints.show();
+        } else {
+            await window.overlay.hints.hide();
+        }
     }
 
     // Текст из поля уходит вместе со скриншотом: «объясни этот запрос» и
@@ -894,6 +870,14 @@ export class OverlayApp extends LitElement {
             this.status = 'idle';
             this.error = error.message;
         }
+    }
+
+    // Ответ по речи уходит в отдельное окно: основной чат по экрану он не
+    // трогает. Захват живёт здесь, поэтому сброс буфера тоже отсюда.
+    async askVoice() {
+        await window.overlay.voice.show();
+        await window.overlay.listen.flush();
+        await window.overlay.ask({ useTranscript: true, conversation: 'voice' });
     }
 
     async askFollowUp(event) {
@@ -982,17 +966,6 @@ export class OverlayApp extends LitElement {
         ></span>`;
     }
 
-    renderHints() {
-        const keys = this.keybinds;
-        return html`<div class="hints">
-            <span><kbd>${keys.capture}</kbd> снять экран</span>
-            <span><kbd>${keys.askVoice}</kbd> голос → попап</span>
-            <span><kbd>${keys.toggleClickThrough}</kbd> насквозь</span>
-            <span><kbd>${keys.toggleVisibility}</kbd> скрыть</span>
-            <span><kbd>${keys.newSession}</kbd> сброс</span>
-        </div>`;
-    }
-
     renderTranscriptStrip() {
         if (this.transcriptError) {
             return html`<div class="transcript"><span class="tag">звук:</span><span class="body">${this.transcriptError}</span></div>`;
@@ -1018,10 +991,14 @@ export class OverlayApp extends LitElement {
                           </span>`
                         : ''
                 }
-                <select @change=${this.onModelChange} title="Модель">
+                <select @change=${event => this.onModelChange(event.target.value)} title="Модель">
                     ${this.models.map(item => html`<option value=${item.id} ?selected=${item.id === this.config.model}>${item.label}</option>`)}
                 </select>
-                <select @change=${e => this.setConfig('effort', e.target.value)} ?disabled=${model.efforts.length === 0} title="Глубина рассуждения">
+                <select
+                    @change=${event => this.setConfig('effort', event.target.value)}
+                    ?disabled=${model.efforts.length === 0}
+                    title="Глубина рассуждения"
+                >
                     ${
                         model.efforts.length === 0
                             ? html`<option value="">—</option>`
@@ -1032,7 +1009,7 @@ export class OverlayApp extends LitElement {
                 <span class="cost" title="Потрачено за сессию: ${this.cost.requests} запрос(ов)">
                     ${window.overlay.cost.format(this.cost.dollars)}
                 </span>
-                <button @click=${this.openSetup} title="Настройки">⚙</button>
+                <button @click=${this.openSetup} title="К настройкам">⚙</button>
                 <button @click=${() => window.overlay.window.hide()} title="Спрятать">✕</button>
             </header>
 
@@ -1040,7 +1017,11 @@ export class OverlayApp extends LitElement {
 
             <main class=${this.preferences.fontSize || 'medium'}>
                 ${this.error ? html`<div class="error">${this.error}</div>` : ''}
-                ${this.answer ? this.renderMarkdown(this.answer) : html`<div class="note">Жду вопроса. ${this.keybinds.capture} — снять экран.</div>`}
+                ${
+                    this.answer
+                        ? this.renderMarkdown(this.answer)
+                        : html`<div class="empty">Жду вопроса. ${this.keybinds.capture} — снять экран.</div>`
+                }
             </main>
 
             ${this.renderTranscriptStrip()}
@@ -1048,407 +1029,362 @@ export class OverlayApp extends LitElement {
             <footer>
                 <input
                     type="text"
-                    placeholder="Вопрос: Enter — без экрана, Alt+Space — со скриншотом"
-                    @keydown=${e => e.key === 'Enter' && this.askFollowUp(e)}
+                    placeholder="Вопрос: Enter — без экрана, ${this.keybinds.capture} — со скриншотом"
+                    @keydown=${event => event.key === 'Enter' && this.askFollowUp(event)}
                 />
                 <button class="primary" @click=${this.capture} ?disabled=${this.status === 'busy'}>Снять экран</button>
             </footer>
-
-            ${this.renderHints()}
         `;
     }
 
-    renderKeyField() {
-        const check = this.keyCheck;
-        return html`<div class="field">
-            <label>API-ключ Anthropic ${this.hasApiKey ? '— сохранён' : '— не задан'}</label>
-            <div class="inline">
-                <input
-                    type="password"
-                    placeholder=${this.hasApiKey ? 'заменить ключ…' : 'sk-ant-...'}
-                    .value=${this.apiKeyDraft}
-                    @input=${e => (this.apiKeyDraft = e.target.value)}
-                />
-                <button @click=${this.saveApiKey} ?disabled=${!this.apiKeyDraft}>Сохранить</button>
-                <button @click=${this.testKey} ?disabled=${!this.hasApiKey || (check && check.pending)}>
-                    ${check && check.pending ? 'Проверяю…' : 'Проверить'}
-                </button>
+    /* ── вкладки экрана подготовки ─────────────────────────────────── */
+
+    renderSessionTab() {
+        const model = this.currentModel;
+        const voice = this.voiceModel;
+        const sound = Boolean(this.preferences.listenInSession);
+
+        return html`
+            <div class="group">
+                <div class="head">Ответы по экрану</div>
+                <div class="card">
+                    <div class="row">
+                        ${selectRow(
+                            'Модель',
+                            this.models.map(item => [item.id, item.label]),
+                            this.config.model,
+                            value => this.onModelChange(value)
+                        )}
+                        ${
+                            model.efforts.length
+                                ? selectRow(
+                                      'Глубина рассуждения',
+                                      model.efforts.map(level => [level, level]),
+                                      this.config.effort,
+                                      value => this.setConfig('effort', value)
+                                  )
+                                : selectRow('Глубина рассуждения', [['', 'не поддерживается']], '', () => {})
+                        }
+                    </div>
+                    ${selectRow('Профиль', PROFILES, this.preferences.profile, value => this.setPreference('profile', value))}
+                    <div class="field">
+                        <label>Свой контекст — роль, стек, о чём встреча</label>
+                        <textarea
+                            .value=${this.preferences.customPrompt || ''}
+                            @change=${event => this.setPreference('customPrompt', event.target.value)}
+                        ></textarea>
+                    </div>
+                    ${selectRow('Качество скриншота', QUALITIES, this.preferences.imageQuality, value => this.setPreference('imageQuality', value))}
+                </div>
             </div>
-            ${check && check.ok ? html`<span class="note ok">Ключ работает, ответила ${check.model}</span>` : ''}
-            ${check && check.ok === false ? html`<span class="note fail">${check.message}</span>` : ''}
-        </div>`;
-    }
 
-    renderTestRun() {
-        const marks = { ok: '✓', fail: '✕', wait: '·', off: '–' };
-        return html`<div class="field">
-            <div class="inline">
-                <button @click=${this.runTestPass} ?disabled=${this.testRun && this.testRun.running}>
-                    ${this.testRun && this.testRun.running ? 'Проверяю…' : 'Пробный прогон'}
-                </button>
-                <span class="note">снимет экран и задаст один вопрос — как на встрече</span>
+            <div class="group">
+                <div class="head">Звук встречи</div>
+                <div class="card">
+                    ${switchRow('Слушать и расшифровывать локально', 'аудио не покидает машину', sound, value =>
+                        this.setPreference('listenInSession', value)
+                    )}
+                    ${
+                        sound
+                            ? html`
+                                  ${switchRow(
+                                      'Прикладывать расшифровку к экрану',
+                                      'иначе модель отвечает про разговор, а не про экран',
+                                      this.preferences.transcriptWithScreenshot,
+                                      value => this.setPreference('transcriptWithScreenshot', value)
+                                  )}
+                                  <div class="row">
+                                      ${selectRow(
+                                          'Распознавание речи',
+                                          this.whisperModels.map(item => [
+                                              item.id,
+                                              `${item.label}${item.ready ? '' : ' — не скачана'} · ~${item.ramMb} МБ`,
+                                          ]),
+                                          this.preferences.whisperModel,
+                                          value => this.setPreference('whisperModel', value)
+                                      )}
+                                      ${selectRow('Язык разговора', LANGUAGES, this.preferences.whisperLanguage, value =>
+                                          this.setPreference('whisperLanguage', value)
+                                      )}
+                                  </div>
+                                  ${this.whisperModels
+                                      .filter(item => !item.ready)
+                                      .map(item => {
+                                          const percent = this.downloading[item.id];
+                                          return html`<div class="list-row">
+                                              <span class="grow">${item.label} <small>· ${Math.round(item.sizeBytes / 1048576)} МБ</small></span>
+                                              ${
+                                                  percent === undefined
+                                                      ? html`<button @click=${() => this.downloadWhisper(item.id)}>Скачать</button>`
+                                                      : html`<small>${percent}%</small>`
+                                              }
+                                          </div>`;
+                                      })}
+                                  <div class="row">
+                                      ${selectRow(
+                                          'Модель для голоса',
+                                          this.models.map(item => [item.id, item.label]),
+                                          this.config.voiceModel,
+                                          value => this.setConfig('voiceModel', value)
+                                      )}
+                                      ${
+                                          voice.efforts.length
+                                              ? selectRow(
+                                                    'Эффорт голоса',
+                                                    voice.efforts.map(level => [level, level]),
+                                                    this.config.voiceEffort,
+                                                    value => this.setConfig('voiceEffort', value)
+                                                )
+                                              : selectRow('Эффорт голоса', [['', 'не поддерживается']], '', () => {})
+                                      }
+                                  </div>
+                                  ${selectRow('Помнить разговор', MEMORY_MINUTES, this.preferences.transcriptWindowMinutes, value =>
+                                      this.setPreference('transcriptWindowMinutes', Number(value))
+                                  )}
+                              `
+                            : ''
+                    }
+                </div>
             </div>
-            ${
-                this.testRun
-                    ? html`<div class="popover-inline">
-                          ${this.testRun.steps.map(
-                              step =>
-                                  html`<div class="line">
-                                      <span class="mark ${step.state}">${marks[step.state]}</span>
-                                      <span
-                                          ><span class="name">${step.label}</span
-                                          >${step.detail ? html` — <span class="detail">${step.detail}</span>` : ''}</span
-                                      >
-                                  </div>`
-                          )}
-                      </div>`
-                    : ''
-            }
-        </div>`;
+
+            ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+        `;
     }
 
-    renderPastSessions() {
-        if (!this.pastSessions.length) {
-            return '';
-        }
-        return html`<div class="field">
-            <label>Прошлые сессии</label>
-            ${this.pastSessions.map(item => {
-                const totals = item.totals || {};
-                const when = String(item.startedAt || item.id)
-                    .replace('T', ' ')
-                    .slice(0, 16);
-                return html`<div class="model-row">
-                    <span class="grow">
-                        ${when}
-                        <small>
-                            · ${totals.requests || 0} запр. · ${totals.shots || 0} кадр.
-                            ${totals.dollars ? ' · ' + window.overlay.cost.format(totals.dollars) : ''}
-                        </small>
-                    </span>
-                    <button @click=${() => window.overlay.session.open(item.id)}>Открыть</button>
-                </div>`;
-            })}
-        </div>`;
-    }
-
-    renderKeybindsField() {
+    renderHotkeysTab() {
         const failedIds = this.keybindFailed.map(entry => entry.action);
         const conflicts = window.overlay.keybinds.conflicts(this.keybinds);
         const conflicting = new Set(conflicts.flatMap(group => group.actions));
 
-        return html`<div class="field">
-            <label>Горячие клавиши</label>
-            ${window.overlay.keybinds.actions().map(action => {
-                const recording = this.recordingAction === action.id;
-                const broken = failedIds.includes(action.id);
-                const clashes = conflicting.has(action.id);
-                return html`<div class="model-row">
-                    <span class="grow">${action.label}</span>
-                    <button
-                        class=${broken || clashes ? 'broken' : ''}
-                        title=${broken ? 'Сочетание занято другим приложением' : clashes ? 'Дублируется внутри приложения' : ''}
-                        @click=${() => (recording ? this.stopRecording() : this.startRecording(action.id))}
-                    >
-                        ${recording ? 'жми сочетание…' : this.keybinds[action.id]}
-                    </button>
-                </div>`;
-            })}
-            ${
-                this.keybindFailed.length
-                    ? html`<span class="note fail">Занято другим приложением: ${this.keybindFailed.map(e => e.accelerator).join(', ')}</span>`
-                    : ''
-            }
-            ${conflicts.length ? html`<span class="note fail">Одно сочетание на несколько действий</span>` : ''}
-            <button @click=${this.resetKeybinds} style="align-self:flex-start">Вернуть умолчания</button>
-        </div>`;
-    }
-
-    renderBaseUrlField() {
-        const active = (this.config.baseUrl || '').trim();
-        return html`<div class="field">
-            <label>Свой адрес API — если ключ идёт через шлюз</label>
-            <div class="inline">
-                <input
-                    type="text"
-                    placeholder="пусто — напрямую в Anthropic"
-                    .value=${this.baseUrlDraft}
-                    @input=${e => (this.baseUrlDraft = e.target.value)}
-                />
-                <button @click=${this.saveBaseUrl}>Применить</button>
-            </div>
-            ${active ? html`<span class="note fail">Ключ уходит на ${active}, а не в Anthropic напрямую. Доверяй этому адресу.</span>` : ''}
-            ${this.baseUrlError ? html`<span class="note fail">${this.baseUrlError}</span>` : ''}
-        </div>`;
-    }
-
-    renderProxyField() {
-        const draft = this.proxyDraft || {};
-        const update = (key, value) => {
-            this.proxyDraft = { ...this.proxyDraft, [key]: value };
-        };
-        return html`<div class="field">
-            <div class="checkbox" style="display:flex">
-                <input type="checkbox" id="proxy-enabled" .checked=${Boolean(draft.enabled)} @change=${e => update('enabled', e.target.checked)} />
-                <label for="proxy-enabled">Пускать запросы к API через прокси</label>
-            </div>
-            ${
-                draft.enabled
-                    ? html`<div class="inline">
-                              <select @change=${e => update('scheme', e.target.value)}>
-                                  ${['socks5', 'socks4', 'http', 'https'].map(
-                                      scheme => html`<option value=${scheme} ?selected=${scheme === draft.scheme}>${scheme}</option>`
-                                  )}
-                              </select>
-                              <input type="text" .value=${draft.host || ''} placeholder="127.0.0.1" @input=${e => update('host', e.target.value)} />
-                              <input
-                                  type="number"
-                                  style="max-width:80px"
-                                  .value=${String(draft.port || '')}
-                                  placeholder="1080"
-                                  @input=${e => update('port', Number(e.target.value))}
-                              />
-                              <button @click=${this.saveProxy}>Применить</button>
-                          </div>
-                          <span class="note">Системный ВПН при этом не нужен: через прокси идёт только это приложение.</span>`
-                    : html`<button @click=${this.saveProxy} style="align-self:flex-start">Применить</button>`
-            }
-            ${this.proxyError ? html`<span class="note fail">${this.proxyError}</span>` : ''}
-            ${
-                this.config.proxy && this.config.proxy.enabled
-                    ? html`<span class="note ok">Активен: ${this.config.proxy.scheme}://${this.config.proxy.host}:${this.config.proxy.port}</span>`
-                    : ''
-            }
-        </div>`;
-    }
-
-    renderWhisperField() {
-        const current = this.preferences.whisperModel;
-        return html`<div class="field">
-            <label>Модель распознавания речи</label>
-            ${this.whisperModels.map(model => {
-                const percent = this.downloading[model.id];
-                return html`<div class="model-row">
-                    <input
-                        type="radio"
-                        name="whisper"
-                        ?checked=${model.id === current}
-                        ?disabled=${!model.ready}
-                        @change=${() => this.setPreference('whisperModel', model.id)}
-                    />
-                    <span class="grow">
-                        ${model.label}
-                        <small> · ${Math.round(model.sizeBytes / 1048576)} МБ · ~${model.ramMb} МБ RAM</small>
-                    </span>
-                    ${
-                        model.ready
-                            ? html`<small>на диске</small>`
-                            : percent === undefined
-                              ? html`<button @click=${() => this.downloadWhisper(model.id)}>Скачать</button>`
-                              : html`<small>${percent}%</small>`
-                    }
-                </div>`;
-            })}
-        </div>`;
-    }
-
-    renderSetup() {
-        const model = this.currentModel;
         return html`
-            <header>
-                ${this.renderHealthDot()}
-                <span class="spacer"></span>
-                <button @click=${() => window.overlay.window.hide()} title="Спрятать">✕</button>
-            </header>
+            <div class="group">
+                <div class="head">Сочетания клавиш</div>
+                <div class="card">
+                    ${window.overlay.keybinds.actions().map(action => {
+                        const recording = this.recordingAction === action.id;
+                        const broken = failedIds.includes(action.id);
+                        const clashes = conflicting.has(action.id);
+                        return html`<div class="list-row">
+                            <span class="grow">${action.label}</span>
+                            <button
+                                class=${broken || clashes ? 'broken' : ''}
+                                title=${broken ? 'Занято другим приложением' : clashes ? 'Дублируется внутри приложения' : ''}
+                                @click=${() => (recording ? this.stopRecording() : this.startRecording(action.id))}
+                            >
+                                ${recording ? 'жми сочетание…' : this.keybinds[action.id]}
+                            </button>
+                        </div>`;
+                    })}
+                </div>
+                ${
+                    this.keybindFailed.length
+                        ? html`<span class="note fail">
+                              Занято другим приложением: ${this.keybindFailed.map(item => item.accelerator).join(', ')}
+                          </span>`
+                        : ''
+                }
+                ${conflicts.length ? html`<span class="note fail">Одно сочетание на несколько действий</span>` : ''}
+                <div class="list-row">
+                    <span class="grow note">
+                        Всё на Alt намеренно: Cmd+M и Cmd+Enter заняты в macOS повсеместно, а глобальная регистрация отбирает сочетание у всех
+                        приложений сразу.
+                    </span>
+                    <button @click=${this.resetKeybinds}>Вернуть умолчания</button>
+                </div>
+            </div>
 
-            ${this.healthOpen ? this.renderHealthPopover() : ''}
+            <div class="group">
+                <div class="head">Подсказки поверх экрана</div>
+                <div class="card">
+                    ${switchRow('Показывать во время сессии', 'полупрозрачная плашка у края экрана', this.preferences.hintsVisible, value =>
+                        this.setPreference('hintsVisible', value)
+                    )}
+                    ${selectRow('Угол экрана', CORNERS, this.preferences.hintsCorner, value => window.overlay.hints.setCorner(value))}
+                </div>
+            </div>
+        `;
+    }
 
-            <main>
-                <div class="setup">
-                    ${this.renderKeyField()} ${this.renderBaseUrlField()} ${this.renderProxyField()}
+    renderSettingsTab() {
+        const check = this.keyCheck;
+        const activeBase = (this.config.baseUrl || '').trim();
+        const proxy = this.proxyDraft || {};
 
-                    <div class="row">
-                        <div class="field">
-                            <label>Модель Claude</label>
-                            <select @change=${this.onModelChange}>
-                                ${this.models.map(
-                                    item => html`<option value=${item.id} ?selected=${item.id === this.config.model}>${item.label}</option>`
-                                )}
-                            </select>
+        return html`
+            <div class="group">
+                <div class="head">Доступ к API</div>
+                <div class="card">
+                    <div class="field">
+                        <label>Ключ Anthropic ${this.hasApiKey ? '— сохранён' : '— не задан'}</label>
+                        <div class="inline">
+                            <input
+                                type="password"
+                                placeholder=${this.hasApiKey ? 'заменить ключ…' : 'sk-ant-...'}
+                                .value=${this.apiKeyDraft}
+                                @input=${event => (this.apiKeyDraft = event.target.value)}
+                            />
+                            <button @click=${this.saveApiKey} ?disabled=${!this.apiKeyDraft}>Сохранить</button>
+                            <button @click=${this.testKey} ?disabled=${!this.hasApiKey || (check && check.pending)}>
+                                ${check && check.pending ? 'Проверяю…' : 'Проверить'}
+                            </button>
                         </div>
-                        <div class="field">
-                            <label>Глубина рассуждения</label>
-                            <select @change=${e => this.setConfig('effort', e.target.value)} ?disabled=${model.efforts.length === 0}>
-                                ${
-                                    model.efforts.length === 0
-                                        ? html`<option value="">—</option>`
-                                        : model.efforts.map(
-                                              level => html`<option value=${level} ?selected=${level === this.config.effort}>${level}</option>`
-                                          )
-                                }
-                            </select>
-                        </div>
+                        ${check && check.ok ? html`<span class="note ok">Ключ работает, ответила ${check.model}</span>` : ''}
+                        ${check && check.ok === false ? html`<span class="note fail">${check.message}</span>` : ''}
                     </div>
 
                     <div class="field">
-                        <label>Профиль</label>
-                        <select @change=${e => this.setPreference('profile', e.target.value)}>
-                            ${PROFILES.map(
-                                profile =>
-                                    html`<option value=${profile.id} ?selected=${profile.id === this.preferences.profile}>${profile.label}</option>`
-                            )}
-                        </select>
+                        <label>Свой адрес API — если ключ идёт через шлюз</label>
+                        <div class="inline">
+                            <input
+                                type="text"
+                                placeholder="пусто — напрямую в Anthropic"
+                                .value=${this.baseUrlDraft}
+                                @input=${event => (this.baseUrlDraft = event.target.value)}
+                            />
+                            <button @click=${this.saveBaseUrl}>Применить</button>
+                        </div>
+                        ${activeBase ? html`<span class="note fail">Ключ уходит на ${activeBase}. Доверяй этому адресу.</span>` : ''}
+                        ${this.baseUrlError ? html`<span class="note fail">${this.baseUrlError}</span>` : ''}
                     </div>
 
-                    <div class="field">
-                        <label>Свой контекст (роль, стек, о чём встреча)</label>
-                        <textarea
-                            .value=${this.preferences.customPrompt || ''}
-                            @change=${e => this.setPreference('customPrompt', e.target.value)}
-                        ></textarea>
-                    </div>
-
-                    <div class="field checkbox">
-                        <input
-                            type="checkbox"
-                            id="listen-in-session"
-                            .checked=${Boolean(this.preferences.listenInSession)}
-                            @change=${e => this.setPreference('listenInSession', e.target.checked)}
-                        />
-                        <label for="listen-in-session">Слушать звук встречи и расшифровывать локально</label>
-                    </div>
-
+                    ${switchRow('Пускать запросы через прокси', 'системный ВПН при этом не нужен', proxy.enabled, value => {
+                        this.proxyDraft = { ...this.proxyDraft, enabled: value };
+                        this.saveProxy();
+                    })}
                     ${
-                        this.preferences.listenInSession
-                            ? html`<div class="field checkbox">
-                                  <input
-                                      type="checkbox"
-                                      id="transcript-with-screenshot"
-                                      .checked=${Boolean(this.preferences.transcriptWithScreenshot)}
-                                      @change=${e => this.setPreference('transcriptWithScreenshot', e.target.checked)}
-                                  />
-                                  <label for="transcript-with-screenshot">Прикладывать расшифровку и к запросам по экрану</label>
-                              </div>`
-                            : ''
-                    }
-                    ${
-                        this.displays > 1
-                            ? html`<div class="field checkbox">
-                                  <input
-                                      type="checkbox"
-                                      id="capture-cursor"
-                                      .checked=${this.preferences.captureDisplay === 'cursor'}
-                                      @change=${e => this.setPreference('captureDisplay', e.target.checked ? 'cursor' : 'primary')}
-                                  />
-                                  <label for="capture-cursor">Снимать монитор под курсором (мониторов: ${this.displays})</label>
-                              </div>`
-                            : ''
-                    }
-                    ${this.preferences.listenInSession ? this.renderWhisperField() : ''}
-                    ${
-                        this.preferences.listenInSession
-                            ? html`<div class="row">
-                                  <div class="field">
-                                      <label>Модель для голоса</label>
-                                      <select @change=${e => this.setConfig('voiceModel', e.target.value)}>
-                                          ${this.models.map(
-                                              item =>
-                                                  html`<option value=${item.id} ?selected=${item.id === this.config.voiceModel}>
-                                                      ${item.label}
-                                                  </option>`
-                                          )}
-                                      </select>
-                                  </div>
-                                  <div class="field">
-                                      <label>Эффорт голоса</label>
-                                      <select
-                                          @change=${e => this.setConfig('voiceEffort', e.target.value)}
-                                          ?disabled=${this.voiceModel.efforts.length === 0}
-                                      >
-                                          ${
-                                              this.voiceModel.efforts.length === 0
-                                                  ? html`<option value="">—</option>`
-                                                  : this.voiceModel.efforts.map(
-                                                        level =>
-                                                            html`<option value=${level} ?selected=${level === this.config.voiceEffort}>
-                                                                ${level}
-                                                            </option>`
-                                                    )
-                                          }
-                                      </select>
-                                  </div>
-                              </div>`
-                            : ''
-                    }
-                    ${
-                        this.preferences.listenInSession
-                            ? html`<div class="field">
-                                  <label>Помнить разговор</label>
-                                  <select @change=${e => this.setPreference('transcriptWindowMinutes', Number(e.target.value))}>
-                                      ${[2, 5, 10, 30].map(
-                                          minutes =>
-                                              html`<option value=${minutes} ?selected=${minutes === Number(this.preferences.transcriptWindowMinutes)}>
-                                                  ${minutes} мин
-                                              </option>`
+                        proxy.enabled
+                            ? html`<div class="inline">
+                                  <select @change=${event => (this.proxyDraft = { ...this.proxyDraft, scheme: event.target.value })}>
+                                      ${PROXY_SCHEMES.map(
+                                          ([id, title]) => html`<option value=${id} ?selected=${id === proxy.scheme}>${title}</option>`
                                       )}
                                   </select>
+                                  <input
+                                      type="text"
+                                      .value=${proxy.host || ''}
+                                      placeholder="127.0.0.1"
+                                      @input=${event => (this.proxyDraft = { ...this.proxyDraft, host: event.target.value })}
+                                  />
+                                  <input
+                                      type="number"
+                                      style="max-width:82px"
+                                      .value=${String(proxy.port || '')}
+                                      placeholder="1080"
+                                      @input=${event => (this.proxyDraft = { ...this.proxyDraft, port: Number(event.target.value) })}
+                                  />
+                                  <button @click=${this.saveProxy}>Применить</button>
                               </div>`
                             : ''
                     }
+                    ${this.proxyError ? html`<span class="note fail">${this.proxyError}</span>` : ''}
+                </div>
+            </div>
 
+            <div class="group">
+                <div class="head">Вид окна</div>
+                <div class="card">
                     <div class="row">
+                        ${selectRow('Размер шрифта', FONT_SIZES, this.preferences.fontSize, value => this.setPreference('fontSize', value))}
                         <div class="field">
-                            <label>Язык разговора</label>
-                            <select @change=${e => this.setPreference('whisperLanguage', e.target.value)}>
-                                ${LANGUAGES.map(
-                                    ([code, title]) =>
-                                        html`<option value=${code} ?selected=${code === this.preferences.whisperLanguage}>${title}</option>`
-                                )}
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label>Качество скриншота</label>
-                            <select @change=${e => this.setPreference('imageQuality', e.target.value)}>
-                                ${QUALITIES.map(
-                                    quality =>
-                                        html`<option value=${quality.id} ?selected=${quality.id === this.preferences.imageQuality}>
-                                            ${quality.label}
-                                        </option>`
-                                )}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="field">
-                            <label>Размер шрифта</label>
-                            <select @change=${e => this.setPreference('fontSize', e.target.value)}>
-                                ${FONT_SIZES.map(
-                                    ([size, title]) => html`<option value=${size} ?selected=${size === this.preferences.fontSize}>${title}</option>`
-                                )}
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label>Прозрачность: ${Math.round((this.preferences.backgroundTransparency ?? 0.75) * 100)}%</label>
+                            <label>Непрозрачность: ${Math.round((this.preferences.backgroundTransparency ?? 0.75) * 100)}%</label>
                             <input
                                 type="range"
                                 min="0.2"
                                 max="1"
                                 step="0.05"
                                 .value=${String(this.preferences.backgroundTransparency ?? 0.75)}
-                                @input=${e => this.setPreferenceSmooth('backgroundTransparency', Number(e.target.value))}
+                                @input=${event => this.setPreferenceSmooth('backgroundTransparency', Number(event.target.value))}
                             />
                         </div>
                     </div>
-
-                    ${this.renderTestRun()} ${this.renderPastSessions()} ${this.renderKeybindsField()}
-                    ${this.error ? html`<div class="error">${this.error}</div>` : ''}
-
-                    <button class="primary big" @click=${this.startSession} ?disabled=${!this.hasApiKey || this.starting}>
-                        ${this.starting ? 'Проверяю экран и звук…' : 'Начать сессию'}
-                    </button>
+                    ${
+                        this.displays > 1
+                            ? switchRow(
+                                  'Снимать монитор под курсором',
+                                  `подключено мониторов: ${this.displays}; иначе снимается основной`,
+                                  this.preferences.captureDisplay === 'cursor',
+                                  value => this.setPreference('captureDisplay', value ? 'cursor' : 'primary')
+                              )
+                            : ''
+                    }
                 </div>
-            </main>
+            </div>
+        `;
+    }
+
+    renderHistoryTab() {
+        if (!this.pastSessions.length) {
+            return html`<div class="group">
+                <div class="head">Прошлые сессии</div>
+                <div class="empty">Пока пусто. Каждая сессия сохраняет кадры и лог в свой каталог.</div>
+            </div>`;
+        }
+
+        return html`<div class="group">
+            <div class="head">Прошлые сессии</div>
+            <div class="card">
+                ${this.pastSessions.map(item => {
+                    const totals = item.totals || {};
+                    const when = String(item.startedAt || item.id)
+                        .replace('T', ' ')
+                        .slice(0, 16);
+                    return html`<div class="list-row">
+                        <span class="grow">
+                            ${when}
+                            <small>
+                                · ${totals.requests || 0} запр. · ${totals.shots || 0} кадр.
+                                ${totals.dollars ? ' · ' + window.overlay.cost.format(totals.dollars) : ''}
+                            </small>
+                        </span>
+                        <button @click=${() => window.overlay.session.open(item.id)}>Открыть</button>
+                    </div>`;
+                })}
+            </div>
+            <span class="note">Каталоги не подчищаются сами: кадры встреч — твои данные.</span>
+        </div>`;
+    }
+
+    renderSetup() {
+        const panes = {
+            session: () => this.renderSessionTab(),
+            hotkeys: () => this.renderHotkeysTab(),
+            settings: () => this.renderSettingsTab(),
+            history: () => this.renderHistoryTab(),
+        };
+
+        return html`
+            <header>
+                ${this.renderHealthDot()}
+                <span class="title">Claude Overlay</span>
+                <span class="spacer"></span>
+                <button @click=${() => window.overlay.window.hide()} title="Спрятать">✕</button>
+            </header>
+
+            ${this.healthOpen ? this.renderHealthPopover() : ''}
+
+            <div class="body">
+                <nav>
+                    ${TABS.map(
+                        tab =>
+                            html`<button aria-current=${this.tab === tab.id} @click=${() => (this.tab = tab.id)} title=${tab.label}>
+                                ${icon(tab.icon)}<span>${tab.label}</span>
+                            </button>`
+                    )}
+                </nav>
+
+                <div class="pane">
+                    <div class="scroll">${panes[this.tab]()}</div>
+                    ${
+                        this.tab === 'session'
+                            ? html`<div class="actions">
+                                  <button class="primary big" @click=${this.startSession} ?disabled=${!this.hasApiKey || this.starting}>
+                                      ${this.starting ? 'Проверяю экран и звук…' : 'Начать сессию'}
+                                  </button>
+                              </div>`
+                            : ''
+                    }
+                </div>
+            </div>
         `;
     }
 

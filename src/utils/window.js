@@ -6,9 +6,11 @@ const storage = require('../storage');
 const { mergeKeybinds, defaultKeybinds } = require('./keybinds');
 const { purgeNow } = require('./whisper');
 
-const SETUP_SIZE = { width: 560, height: 620 };
+const SETUP_SIZE = { width: 760, height: 560 };
 const SESSION_SIZE = { width: 480, height: 380 };
 const VOICE_SIZE = { width: 400, height: 300 };
+const HINTS_SIZE = { width: 210, height: 108 };
+const HINTS_MARGIN = 16;
 const MIN_SIZE = { width: 360, height: 220 };
 
 let clickThrough = false;
@@ -109,6 +111,71 @@ function createVoiceWindow() {
     return voiceWindow;
 }
 
+// Подсказки живут отдельным окном у края экрана: рядом с доком почти всегда
+// есть пустое место, а во весь экран приложение разворачивают редко.
+function hintsPosition(corner) {
+    const { workArea } = screen.getPrimaryDisplay();
+    const left = workArea.x + HINTS_MARGIN;
+    const right = workArea.x + workArea.width - HINTS_SIZE.width - HINTS_MARGIN;
+    const top = workArea.y + HINTS_MARGIN;
+    const bottom = workArea.y + workArea.height - HINTS_SIZE.height - HINTS_MARGIN;
+
+    switch (corner) {
+        case 'top-left':
+            return { x: left, y: top };
+        case 'top-right':
+            return { x: right, y: top };
+        case 'bottom-left':
+            return { x: left, y: bottom };
+        default:
+            return { x: right, y: bottom };
+    }
+}
+
+function createHintsWindow() {
+    const corner = storage.getPreferences().hintsCorner;
+    const { x, y } = hintsPosition(corner);
+
+    const hintsWindow = new BrowserWindow({
+        width: HINTS_SIZE.width,
+        height: HINTS_SIZE.height,
+        x,
+        y,
+        resizable: false,
+        frame: false,
+        transparent: true,
+        hasShadow: false,
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        focusable: false,
+        show: false,
+        backgroundColor: '#00000000',
+        webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false },
+    });
+
+    applyContentProtection(hintsWindow, true);
+    hintsWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+    hintsWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // Подсказки только читают: клики должны доходить до окна под ними.
+    hintsWindow.setIgnoreMouseEvents(true, { forward: true });
+    if (process.platform === 'darwin') {
+        try {
+            hintsWindow.setHiddenInMissionControl(true);
+        } catch (error) {
+            console.warn('Не удалось скрыть подсказки из Mission Control:', error.message);
+        }
+    }
+
+    hintsWindow.loadFile(path.join(__dirname, '../hints.html'));
+    return hintsWindow;
+}
+
+function moveHints(hintsWindow, corner) {
+    if (!hintsWindow || hintsWindow.isDestroyed()) return;
+    const { x, y } = hintsPosition(corner);
+    hintsWindow.setPosition(x, y);
+}
+
 // Единственное место, где меняется защита: иначе флаг для индикатора
 // незаметно разъезжается с реальным состоянием окна.
 function applyContentProtection(targetWindow, enabled) {
@@ -136,6 +203,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
     const actions = {
         capture: emit('shortcut:capture'),
+        toggleHints: emit('shortcut:toggle-hints'),
         askVoice: emit('shortcut:ask-voice'),
         listen: emit('shortcut:listen'),
         scrollUp: emit('shortcut:scroll-up'),
@@ -219,6 +287,12 @@ function setupWindowIpcHandlers(mainWindow) {
         const merged = mergeKeybinds(keybinds);
         storage.setKeybinds(merged);
         const failed = updateGlobalShortcuts(merged, mainWindow);
+        // Подсказки показывают сочетания и должны обновиться сразу.
+        for (const target of BrowserWindow.getAllWindows()) {
+            if (!target.isDestroyed()) {
+                target.webContents.send('keybinds:changed');
+            }
+        }
         return { keybinds: merged, failed };
     });
 }
@@ -226,5 +300,7 @@ function setupWindowIpcHandlers(mainWindow) {
 module.exports = {
     createWindow,
     createVoiceWindow,
+    createHintsWindow,
+    moveHints,
     updateGlobalShortcuts,
 };

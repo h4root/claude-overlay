@@ -31,6 +31,8 @@ const DEFAULT_PREFERENCES = {
     whisperLanguage: 'ru',
     listenInSession: true,
     captureDisplay: 'primary',
+    hintsCorner: 'bottom-right',
+    hintsVisible: true,
     transcriptWithScreenshot: false,
     transcriptWindowMinutes: 10,
     voicePrompt: 'Ответь на то, что сейчас прозвучало в разговоре.',

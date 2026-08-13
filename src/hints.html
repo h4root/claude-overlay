@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            http-equiv="content-security-policy"
+            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'"
+        />
+        <title>Подсказки</title>
+        <style>
+            :root {
+                --text-primary: #f2f2f2;
+                --text-secondary: #9a9a9a;
+                --text-muted: #6a6a6a;
+                --font: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+                --font-mono: 'SF Mono', Menlo, Monaco, Consolas, monospace;
+            }
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+                background: transparent;
+                -webkit-font-smoothing: antialiased;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            hints-overlay {
+                height: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <hints-overlay></hints-overlay>
+        <script type="module" src="components/HintsOverlay.js"></script>
+    </body>
+</html>

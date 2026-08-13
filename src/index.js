@@ -5,7 +5,7 @@ if (require('electron-squirrel-startup')) {
 }
 
 const { app, BrowserWindow, shell, ipcMain, desktopCapturer, session, powerMonitor } = require('electron');
-const { createWindow, createVoiceWindow, updateGlobalShortcuts } = require('./utils/window');
+const { createWindow, createVoiceWindow, createHintsWindow, moveHints, updateGlobalShortcuts } = require('./utils/window');
 const { mergeKeybinds } = require('./utils/keybinds');
 const claude = require('./utils/claude');
 const audio = require('./utils/audio');
@@ -18,10 +18,12 @@ const { normalizeBaseUrl } = require('./utils/claude-client');
 
 let mainWindow = null;
 let voiceWindow = null;
+let hintsWindow = null;
 
 function createMainWindow() {
     mainWindow = createWindow();
     voiceWindow = createVoiceWindow();
+    hintsWindow = createHintsWindow();
 
     claude.setWindow('main', mainWindow);
     claude.setWindow('voice', voiceWindow);
@@ -149,6 +151,25 @@ function setupStorageIpcHandlers() {
 
 function setupGeneralIpcHandlers() {
     handle('get-app-version', () => app.getVersion());
+
+    handle('hints:show', () => {
+        if (hintsWindow && !hintsWindow.isDestroyed()) {
+            moveHints(hintsWindow, storage.getPreferences().hintsCorner);
+            hintsWindow.showInactive();
+        }
+    });
+
+    handle('hints:hide', () => {
+        if (hintsWindow && !hintsWindow.isDestroyed()) {
+            hintsWindow.hide();
+        }
+    });
+
+    handle('hints:corner', corner => {
+        storage.updatePreference('hintsCorner', corner);
+        moveHints(hintsWindow, corner);
+        return corner;
+    });
 
     handle('session:start', context => sessions.startSession(context));
     handle('session:finish', () => sessions.finishSession());

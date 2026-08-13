@@ -71,6 +71,12 @@ const overlay = {
         open: id => unwrap('session:open', id),
     },
 
+    hints: {
+        show: () => unwrap('hints:show'),
+        hide: () => unwrap('hints:hide'),
+        setCorner: corner => unwrap('hints:corner', corner),
+    },
+
     voice: {
         show: () => ipcRenderer.invoke('voice:show'),
         hide: () => ipcRenderer.invoke('voice:hide'),

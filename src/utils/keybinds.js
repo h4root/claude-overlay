@@ -8,6 +8,7 @@ const ACTIONS = [
     { id: 'toggleVisibility', label: 'Спрятать / показать окно', default: 'Alt+\\' },
     { id: 'toggleClickThrough', label: 'Клики сквозь окно', default: 'Alt+M' },
     { id: 'listen', label: 'Слушать звук встречи', default: 'Alt+L' },
+    { id: 'toggleHints', label: 'Показать / спрятать подсказки', default: 'Alt+H' },
     { id: 'newSession', label: 'Сбросить диалог', default: 'Alt+N' },
     { id: 'scrollUp', label: 'Прокрутить ответ вверх', default: 'Alt+Shift+Up' },
     { id: 'scrollDown', label: 'Прокрутить ответ вниз', default: 'Alt+Shift+Down' },
