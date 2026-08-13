@@ -62,6 +62,14 @@ const overlay = {
         clear: () => ipcRenderer.invoke('audio:clear-transcript'),
     },
 
+    session: {
+        start: context => unwrap('session:start', context),
+        finish: () => unwrap('session:finish'),
+        current: () => unwrap('session:current'),
+        list: limit => unwrap('session:list', limit),
+        open: id => unwrap('session:open', id),
+    },
+
     voice: {
         show: () => ipcRenderer.invoke('voice:show'),
         hide: () => ipcRenderer.invoke('voice:hide'),

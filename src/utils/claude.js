@@ -7,6 +7,8 @@ const { buildRequest, normalizeApiError, maskKey, MODELS } = require('./claude-c
 const { buildSystemPrompt, buildVoiceSystemPrompt } = require('./prompts');
 const { RequestGate } = require('./request-gate');
 const { getTranscriptForRequest, clearTranscript } = require('./audio');
+const sessions = require('./sessions');
+const { costOf } = require('./pricing');
 
 const HISTORY_LIMIT = 12;
 
@@ -113,6 +115,9 @@ async function ask({ images = [], prompt = '', useTranscript = false, conversati
         return { success: false };
     }
 
+    const shot = images.length ? sessions.saveShot(images[0].data) : null;
+    sessions.logEntry({ kind: 'ask', prompt: prompt || undefined, shot, withTranscript: useTranscript || undefined });
+
     emit('claude:start', {});
 
     try {
@@ -139,6 +144,23 @@ async function ask({ images = [], prompt = '', useTranscript = false, conversati
             .join('');
 
         rememberTurn(chat, request.messages.at(-1).content, answer);
+
+        const usage = message.usage || {};
+        let dollars = 0;
+        try {
+            dollars = costOf(usage, message.model);
+        } catch {
+            // Новая модель, которой ещё нет в таблице цен, не должна ломать запись.
+        }
+        sessions.logEntry({
+            kind: 'ans',
+            text: answer,
+            inputTokens: usage.input_tokens,
+            outputTokens: usage.output_tokens,
+            dollars: dollars || undefined,
+        });
+        sessions.recordUsage({ inputTokens: usage.input_tokens, outputTokens: usage.output_tokens, dollars });
+
         emit('claude:done', { text: answer, usage: message.usage, model: message.model });
         return { success: true };
     } catch (error) {
@@ -149,6 +171,8 @@ async function ask({ images = [], prompt = '', useTranscript = false, conversati
         chat.activeStream = null;
         const normalized = normalizeApiError(error);
         console.error(`Claude request failed (${conversationId}):`, normalized.kind, normalized.message);
+        sessions.logEntry({ kind: 'err', message: normalized.message });
+        sessions.recordError();
         emit('claude:error', normalized);
         return { success: false };
     }

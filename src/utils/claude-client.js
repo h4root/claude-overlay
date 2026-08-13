@@ -82,10 +82,7 @@ function prepareHistory(history, keepLastImages) {
     if (!keepLastImages) {
         return history.map(withoutImages);
     }
-    const lastWithImage = history.reduce(
-        (found, message, index) => (message.content.some(block => block.type === 'image') ? index : found),
-        -1
-    );
+    const lastWithImage = history.reduce((found, message, index) => (message.content.some(block => block.type === 'image') ? index : found), -1);
     return history.map((message, index) => (index === lastWithImage ? message : withoutImages(message)));
 }
 

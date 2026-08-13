@@ -55,6 +55,8 @@ export class OverlayApp extends LitElement {
         keybindFailed: { state: true },
         recordingAction: { state: true },
         displays: { state: true },
+        pastSessions: { state: true },
+        testRun: { state: true },
     };
 
     static externalStyles = html`
@@ -410,6 +412,37 @@ export class OverlayApp extends LitElement {
             border-color: var(--danger);
             color: var(--danger);
         }
+        .popover-inline {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.04);
+            font-size: var(--font-size-xs);
+        }
+        .popover-inline .line {
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+        }
+        .popover-inline .mark {
+            flex: 0 0 auto;
+            width: 12px;
+        }
+        .popover-inline .mark.ok {
+            color: var(--success);
+        }
+        .popover-inline .mark.fail {
+            color: var(--danger);
+        }
+        .popover-inline .mark.wait,
+        .popover-inline .mark.off {
+            color: var(--text-muted);
+        }
+        .popover-inline .detail {
+            color: var(--text-secondary);
+        }
         .model-row small {
             color: var(--text-muted);
             font-size: 10px;
@@ -447,6 +480,8 @@ export class OverlayApp extends LitElement {
         this.keybindFailed = [];
         this.recordingAction = '';
         this.displays = 1;
+        this.pastSessions = [];
+        this.testRun = null;
         this.unsubscribes = [];
         // Перетаскивание ползунка даёт десятки событий — на диск должно уйти одно.
         this.savePreferenceSoon = null;
@@ -465,6 +500,7 @@ export class OverlayApp extends LitElement {
         this.hasApiKey = await window.overlay.storage.hasApiKey();
         this.whisperModels = await window.overlay.whisper.models();
         this.displays = await window.overlay.displays();
+        this.pastSessions = await window.overlay.session.list(5);
         this.contentProtected = await window.overlay.window.isContentProtected();
         this.applyTransparency();
 
@@ -637,6 +673,8 @@ export class OverlayApp extends LitElement {
         }
         this.recordingAction = '';
         this.displays = 1;
+        this.pastSessions = [];
+        this.testRun = null;
     }
 
     async applyKeybind(action, accelerator) {
@@ -652,11 +690,94 @@ export class OverlayApp extends LitElement {
         this.keybindFailed = result.failed || [];
     }
 
+    // Пробный прогон до встречи: проверяет ровно тот путь, которым потом
+    // пойдёт работа, и показывает время и цену круга.
+    async runTestPass() {
+        const steps = [
+            { id: 'key', label: 'Ключ', state: 'wait', detail: '' },
+            { id: 'screen', label: 'Экран', state: 'wait', detail: '' },
+            { id: 'sound', label: 'Звук', state: 'wait', detail: '' },
+            { id: 'round', label: 'Полный круг', state: 'wait', detail: '' },
+        ];
+        const update = (id, state, detail) => {
+            this.testRun = { running: true, steps: steps.map(s => (s.id === id ? { ...s, state, detail } : s)) };
+            Object.assign(
+                steps.find(s => s.id === id),
+                { state, detail }
+            );
+        };
+        this.testRun = { running: true, steps };
+
+        const key = await window.overlay.testKey();
+        update('key', key.success ? 'ok' : 'fail', key.success ? `ответила ${key.model}` : key.message);
+
+        let image = null;
+        try {
+            image = await window.overlay.captureScreen();
+            this.screenOk = true;
+            update('screen', 'ok', `${image.width}×${image.height}, ${Math.round(image.data.length / 1365)} КБ`);
+        } catch (error) {
+            this.screenOk = false;
+            update('screen', 'fail', error.message);
+        }
+
+        if (!this.preferences.listenInSession) {
+            update('sound', 'off', 'выключен для этой сессии');
+        } else {
+            try {
+                if (!this.listening) {
+                    await this.toggleListening();
+                }
+                const heard = await this.waitForAudioTick(12000);
+                update('sound', heard ? 'ok' : 'fail', heard ? 'окна звука приходят' : 'за 12 с не пришло ни одного окна');
+            } catch (error) {
+                update('sound', 'fail', error.message);
+            }
+        }
+
+        if (key.success && image) {
+            const before = window.overlay.cost.total().dollars;
+            const startedAt = Date.now();
+            await window.overlay.ask({ images: [image], prompt: 'Ответь одним предложением: что видно на экране?' });
+            const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+            const spent = window.overlay.cost.total().dollars - before;
+            const ok = !this.error;
+            update('round', ok ? 'ok' : 'fail', ok ? `${seconds} с, ${window.overlay.cost.format(spent)}` : this.error);
+            // Пробный вопрос не должен остаться в истории рабочего диалога.
+            await window.overlay.resetConversation('main');
+        } else {
+            update('round', 'fail', 'нечего отправлять: нет ключа или снимка');
+        }
+
+        this.testRun = { running: false, steps };
+    }
+
+    waitForAudioTick(timeoutMs) {
+        return new Promise(resolve => {
+            if (this.lastChunkAt && Date.now() - this.lastChunkAt < 15000) {
+                resolve(true);
+                return;
+            }
+            const started = Date.now();
+            const timer = setInterval(() => {
+                if (this.lastChunkAt && this.lastChunkAt >= started) {
+                    clearInterval(timer);
+                    resolve(true);
+                } else if (Date.now() - started > timeoutMs) {
+                    clearInterval(timer);
+                    resolve(false);
+                }
+            }, 400);
+        });
+    }
+
     async saveProxy() {
         this.proxyError = '';
         this.keybindFailed = [];
         this.recordingAction = '';
         this.displays = 1;
+        this.pastSessions = [];
+        this.testRun = null;
         try {
             await window.overlay.storage.setProxy(this.proxyDraft);
             this.config = await window.overlay.storage.getConfig();
@@ -683,6 +804,7 @@ export class OverlayApp extends LitElement {
         }
         this.whisperModels = await window.overlay.whisper.models();
         this.displays = await window.overlay.displays();
+        this.pastSessions = await window.overlay.session.list(5);
     }
 
     async startSession() {
@@ -702,12 +824,23 @@ export class OverlayApp extends LitElement {
             await window.overlay.voice.show();
         }
 
+        await window.overlay.session.start({
+            model: this.config.model,
+            effort: this.config.effort,
+            profile: this.preferences.profile,
+            voiceModel: this.preferences.listenInSession ? this.config.voiceModel : null,
+            whisperModel: this.preferences.listenInSession ? this.preferences.whisperModel : null,
+            imageQuality: this.preferences.imageQuality,
+        });
+
         await window.overlay.window.setMode('session');
         this.view = 'session';
         this.starting = false;
     }
 
     async openSetup() {
+        await window.overlay.session.finish();
+        this.pastSessions = await window.overlay.session.list(5);
         await window.overlay.voice.hide();
         await window.overlay.window.setMode('setup');
         this.view = 'setup';
@@ -927,6 +1060,59 @@ export class OverlayApp extends LitElement {
         </div>`;
     }
 
+    renderTestRun() {
+        const marks = { ok: '✓', fail: '✕', wait: '·', off: '–' };
+        return html`<div class="field">
+            <div class="inline">
+                <button @click=${this.runTestPass} ?disabled=${this.testRun && this.testRun.running}>
+                    ${this.testRun && this.testRun.running ? 'Проверяю…' : 'Пробный прогон'}
+                </button>
+                <span class="note">снимет экран и задаст один вопрос — как на встрече</span>
+            </div>
+            ${
+                this.testRun
+                    ? html`<div class="popover-inline">
+                          ${this.testRun.steps.map(
+                              step =>
+                                  html`<div class="line">
+                                      <span class="mark ${step.state}">${marks[step.state]}</span>
+                                      <span
+                                          ><span class="name">${step.label}</span
+                                          >${step.detail ? html` — <span class="detail">${step.detail}</span>` : ''}</span
+                                      >
+                                  </div>`
+                          )}
+                      </div>`
+                    : ''
+            }
+        </div>`;
+    }
+
+    renderPastSessions() {
+        if (!this.pastSessions.length) {
+            return '';
+        }
+        return html`<div class="field">
+            <label>Прошлые сессии</label>
+            ${this.pastSessions.map(item => {
+                const totals = item.totals || {};
+                const when = String(item.startedAt || item.id)
+                    .replace('T', ' ')
+                    .slice(0, 16);
+                return html`<div class="model-row">
+                    <span class="grow">
+                        ${when}
+                        <small>
+                            · ${totals.requests || 0} запр. · ${totals.shots || 0} кадр.
+                            ${totals.dollars ? ' · ' + window.overlay.cost.format(totals.dollars) : ''}
+                        </small>
+                    </span>
+                    <button @click=${() => window.overlay.session.open(item.id)}>Открыть</button>
+                </div>`;
+            })}
+        </div>`;
+    }
+
     renderKeybindsField() {
         const failedIds = this.keybindFailed.map(entry => entry.action);
         const conflicts = window.overlay.keybinds.conflicts(this.keybinds);
@@ -1014,7 +1200,7 @@ export class OverlayApp extends LitElement {
                         @change=${() => this.setPreference('whisperModel', model.id)}
                     />
                     <span class="grow">
-                        ${model.label}${model.dominated ? ' (вытеснен turbo)' : ''}
+                        ${model.label}
                         <small> · ${Math.round(model.sizeBytes / 1048576)} МБ · ~${model.ramMb} МБ RAM</small>
                     </span>
                     ${
@@ -1218,7 +1404,8 @@ export class OverlayApp extends LitElement {
                         </div>
                     </div>
 
-                    ${this.renderKeybindsField()} ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+                    ${this.renderTestRun()} ${this.renderPastSessions()} ${this.renderKeybindsField()}
+                    ${this.error ? html`<div class="error">${this.error}</div>` : ''}
 
                     <button class="primary big" @click=${this.startSession} ?disabled=${!this.hasApiKey || this.starting}>
                         ${this.starting ? 'Проверяю экран и звук…' : 'Начать сессию'}

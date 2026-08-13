@@ -4,8 +4,8 @@ import registry from './whisper-models.js';
 const { WHISPER_MODELS, getWhisperModel, modelFilePath } = registry;
 
 describe('реестр моделей whisper', () => {
-    it('содержит три уровня, от лёгкого к тяжёлому', () => {
-        expect(WHISPER_MODELS.map(model => model.id)).toEqual(['small', 'medium', 'large-v3-turbo']);
+    it('содержит два уровня: экономный и точный', () => {
+        expect(WHISPER_MODELS.map(model => model.id)).toEqual(['small', 'large-v3-turbo']);
     });
 
     it('у каждой модели есть всё нужное для скачивания и проверки', () => {
@@ -20,17 +20,15 @@ describe('реестр моделей whisper', () => {
         }
     });
 
-    // medium крупнее small и почти равен turbo по памяти, но слабее и медленнее его.
-    it('помечает medium как вытесненный turbo', () => {
-        expect(getWhisperModel('medium').dominated).toBe(true);
-        expect(getWhisperModel('small').dominated).toBe(false);
-        expect(getWhisperModel('large-v3-turbo').dominated).toBe(false);
+    // Medium вытеснен turbo: та же память, но хуже и медленнее.
+    it('medium больше не предлагается', () => {
+        expect(() => getWhisperModel('medium')).toThrow(/неизвестная модель/i);
     });
 
     it('размер и память растут вместе с уровнем', () => {
-        const [small, medium] = WHISPER_MODELS;
-        expect(small.sizeBytes).toBeLessThan(medium.sizeBytes);
-        expect(small.ramMb).toBeLessThan(medium.ramMb);
+        const [small, turbo] = WHISPER_MODELS;
+        expect(small.sizeBytes).toBeLessThan(turbo.sizeBytes);
+        expect(small.ramMb).toBeLessThan(turbo.ramMb);
     });
 
     it('отдаёт модель по идентификатору', () => {

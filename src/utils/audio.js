@@ -9,6 +9,7 @@ const { encodeWav, isSilent, trimSilence } = require('./audio-buffer');
 const { RollingTranscript } = require('./transcript');
 const { WHISPER_MODELS } = require('./whisper-models');
 const { modelState, transcribe, temporaryWavPath, releaseTemporaryFile, downloadModel } = require('./whisper');
+const sessions = require('./sessions');
 
 const transcriptBuffer = new RollingTranscript();
 
@@ -58,9 +59,11 @@ function clearTranscript() {
 
 async function runWhisper(samples, sampleRate) {
     const preferences = storage.getPreferences();
-    const state = await modelState(modelsDir(), preferences.whisperModel);
+    // Настройка могла остаться от убранной модели.
+    const requested = WHISPER_MODELS.some(model => model.id === preferences.whisperModel) ? preferences.whisperModel : 'large-v3-turbo';
+    const state = await modelState(modelsDir(), requested);
     if (!state.ready) {
-        throw new Error(`Модель ${preferences.whisperModel} не скачана. Открой настройки и скачай её.`);
+        throw new Error(`Модель ${requested} не скачана. Открой настройки и скачай её.`);
     }
 
     const wavPath = temporaryWavPath();
@@ -81,6 +84,7 @@ async function runChunk(samples, sampleRate) {
         const text = await runWhisper(samples, sampleRate);
         if (text) {
             transcriptBuffer.add(text);
+            sessions.logEntry({ kind: 'speech', text });
             send('transcript:update', { text: transcriptBuffer.text() });
         }
         if (lastError) {
@@ -168,7 +172,6 @@ function setupAudioIpcHandlers() {
                 hint: model.hint,
                 sizeBytes: model.sizeBytes,
                 ramMb: model.ramMb,
-                dominated: model.dominated,
                 ready: (await modelState(directory, model.id)).ready,
             }))
         );

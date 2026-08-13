@@ -11,6 +11,7 @@ const claude = require('./utils/claude');
 const audio = require('./utils/audio');
 const { setupCaptureIpcHandlers } = require('./utils/capture');
 const { purgeNow, purgeOrphans } = require('./utils/whisper');
+const sessions = require('./utils/sessions');
 const storage = require('./storage');
 const { buildProxyRules, validateProxy } = require('./utils/proxy');
 
@@ -37,7 +38,10 @@ process.on('unhandledRejection', reason => {
     console.error('Необработанный отказ промиса:', reason && reason.message ? reason.message : reason);
 });
 
-app.on('before-quit', purgeNow);
+app.on('before-quit', () => {
+    sessions.finishSession();
+    purgeNow();
+});
 
 app.whenReady().then(async () => {
     storage.initializeStorage();
@@ -137,6 +141,20 @@ function setupStorageIpcHandlers() {
 
 function setupGeneralIpcHandlers() {
     handle('get-app-version', () => app.getVersion());
+
+    handle('session:start', context => sessions.startSession(context));
+    handle('session:finish', () => sessions.finishSession());
+    handle('session:current', () => sessions.currentSession());
+    handle('session:list', limit => sessions.listSessions(limit));
+
+    handle('session:open', async id => {
+        const found = sessions.listSessions(200).find(item => item.id === id) || sessions.currentSession();
+        if (!found) {
+            throw new Error('Сессия не найдена');
+        }
+        await shell.openPath(found.dir);
+        return found.dir;
+    });
 
     handle('voice:show', () => {
         if (voiceWindow && !voiceWindow.isDestroyed()) {
