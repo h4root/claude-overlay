@@ -31,6 +31,21 @@ const PROFILES = {
     },
 };
 
+const VOICE_BASE = `Ты подсказываешь ответ на вопрос, который только что прозвучал в разговоре.
+Ты получаешь расшифровку последних секунд речи собеседников. Своей речи пользователя там нет.
+
+Формат ответа:
+- Сначала готовый ответ одним-двумя предложениями, чтобы его можно было произнести вслух сразу.
+- Затем при необходимости два-три коротких пункта с деталями или числами.
+- Не больше 80 слов. Ни вступлений, ни пересказа вопроса.
+- Если в расшифровке нет вопроса, скажи это одной строкой и не выдумывай.
+- Расшифровка бывает неточной: если слово явно распознано неверно, ответь по смыслу.`;
+
+function buildVoiceSystemPrompt(customPrompt) {
+    const custom = (customPrompt || '').trim();
+    return custom ? `${VOICE_BASE}\n\nДополнительный контекст от пользователя:\n${custom}` : VOICE_BASE;
+}
+
 function buildSystemPrompt(profile, customPrompt) {
     const selected = PROFILES[profile] || PROFILES.freeform;
     const parts = [BASE, selected.instructions];
@@ -46,4 +61,5 @@ function buildSystemPrompt(profile, customPrompt) {
 module.exports = {
     PROFILES,
     buildSystemPrompt,
+    buildVoiceSystemPrompt,
 };

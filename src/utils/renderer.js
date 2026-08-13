@@ -62,6 +62,11 @@ const overlay = {
         clear: () => ipcRenderer.invoke('audio:clear-transcript'),
     },
 
+    voice: {
+        show: () => ipcRenderer.invoke('voice:show'),
+        hide: () => ipcRenderer.invoke('voice:hide'),
+    },
+
     keybinds: {
         load: () => ipcRenderer.invoke('keybinds:get'),
         save: keybinds => ipcRenderer.invoke('keybinds:set', keybinds),
@@ -90,7 +95,7 @@ const overlay = {
     testKey: () => ipcRenderer.invoke('claude:test-key'),
     ask: payload => ipcRenderer.invoke('claude:ask', payload),
     cancel: () => ipcRenderer.invoke('claude:cancel'),
-    resetConversation: () => ipcRenderer.invoke('claude:reset'),
+    resetConversation: (id = 'main') => ipcRenderer.invoke('claude:reset', id),
 
     on(channel, handler) {
         const listener = (event, payload) => handler(payload);

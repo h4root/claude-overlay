@@ -89,14 +89,18 @@ class RollingTranscript {
 
     // Для запроса к модели: давность видна явно, иначе трёхминутной давности
     // вопрос неотличим от прозвучавшего только что.
-    formatted(now = Date.now()) {
+    formatted(now = Date.now(), { maxAgeMs } = {}) {
         this.prune(now);
-        if (this.entries.length === 0) {
+
+        // Срез только фильтрует выдачу: голосовое окно спрашивает по последним
+        // секундам, но десятиминутная память основного окна должна уцелеть.
+        const visible = maxAgeMs ? this.entries.filter(entry => now - entry.at <= maxAgeMs) : this.entries;
+        if (visible.length === 0) {
             return '';
         }
 
         const groups = [];
-        for (const entry of this.entries) {
+        for (const entry of visible) {
             const last = groups.at(-1);
             if (!last || entry.at - last.at >= PAUSE_MS) {
                 groups.push({ at: entry.at, parts: [entry.text] });

@@ -12,18 +12,21 @@ const { modelState, transcribe, temporaryWavPath, releaseTemporaryFile, download
 
 const transcriptBuffer = new RollingTranscript();
 
-let mainWindow = null;
+let targets = [];
 let currentRun = null;
 let pendingChunk = null;
 let lastError = '';
 
-function setMainWindow(window) {
-    mainWindow = window;
+// Расшифровка идёт в оба окна: попап показывает её живьём.
+function setWindows(windows) {
+    targets = windows.filter(Boolean);
 }
 
 function send(channel, payload) {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(channel, payload);
+    for (const target of targets) {
+        if (target && !target.isDestroyed()) {
+            target.webContents.send(channel, payload);
+        }
     }
 }
 
@@ -43,9 +46,9 @@ function getTranscript() {
 
 // В запрос уходит текст с пометками давности: без них реплика десятиминутной
 // давности неотличима от прозвучавшей только что.
-function getTranscriptForRequest() {
+function getTranscriptForRequest(maxAgeMs) {
     syncWindow();
-    return transcriptBuffer.formatted();
+    return transcriptBuffer.formatted(Date.now(), { maxAgeMs });
 }
 
 function clearTranscript() {
@@ -184,7 +187,7 @@ function setupAudioIpcHandlers() {
 }
 
 module.exports = {
-    setMainWindow,
+    setWindows,
     getTranscriptForRequest,
     setupAudioIpcHandlers,
     getTranscript,

@@ -4,26 +4,38 @@ const { ipcMain, net } = require('electron');
 const Anthropic = require('@anthropic-ai/sdk');
 const storage = require('../storage');
 const { buildRequest, normalizeApiError, maskKey, MODELS } = require('./claude-client');
-const { buildSystemPrompt } = require('./prompts');
+const { buildSystemPrompt, buildVoiceSystemPrompt } = require('./prompts');
 const { RequestGate } = require('./request-gate');
 const { getTranscriptForRequest, clearTranscript } = require('./audio');
 
 const HISTORY_LIMIT = 12;
 
-let mainWindow = null;
 let client = null;
 let clientKey = null;
-let history = [];
-let activeStream = null;
-const gate = new RequestGate();
 
-function setMainWindow(window) {
-    mainWindow = window;
+// Два независимых диалога: разбор экрана не должен перемешиваться с репликами
+// совещания, и сбрасываются они по отдельности.
+const conversations = {
+    main: { window: null, history: [], gate: new RequestGate(), activeStream: null },
+    voice: { window: null, history: [], gate: new RequestGate(), activeStream: null },
+};
+
+function conversation(id) {
+    const found = conversations[id];
+    if (!found) {
+        throw new Error(`Неизвестный диалог: ${id}`);
+    }
+    return found;
 }
 
-function send(channel, payload) {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(channel, payload);
+function setWindow(id, window) {
+    conversation(id).window = window;
+}
+
+function send(id, channel, payload) {
+    const target = conversations[id] && conversations[id].window;
+    if (target && !target.isDestroyed()) {
+        target.webContents.send(channel, payload);
     }
 }
 
@@ -44,56 +56,67 @@ function getClient() {
     return client;
 }
 
-function rememberTurn(userContent, answer) {
-    history.push({ role: 'user', content: userContent });
-    history.push({ role: 'assistant', content: [{ type: 'text', text: answer }] });
-    if (history.length > HISTORY_LIMIT) {
-        history = history.slice(-HISTORY_LIMIT);
+function rememberTurn(chat, userContent, answer) {
+    chat.history.push({ role: 'user', content: userContent });
+    chat.history.push({ role: 'assistant', content: [{ type: 'text', text: answer }] });
+    if (chat.history.length > HISTORY_LIMIT) {
+        chat.history = chat.history.slice(-HISTORY_LIMIT);
     }
 }
 
-function resetHistory() {
-    history = [];
+function resetHistory(id) {
+    conversation(id).history = [];
 }
 
 // История хранится с картинками только для последнего хода: изображения
 // в предыдущих ходах раздувают запрос, а ценность несут редко.
-function historyWithoutImages() {
-    return history.map(message => ({
+function historyWithoutImages(chat) {
+    return chat.history.map(message => ({
         role: message.role,
         content: message.content.filter(block => block.type !== 'image'),
     }));
 }
 
-async function ask({ images = [], prompt = '', useTranscript = false }) {
-    const id = gate.begin();
+const VOICE_WINDOW_MS = 20000;
+
+function requestFor(conversationId, { images, prompt, useTranscript }) {
+    const preferences = storage.getPreferences();
+    const config = storage.getConfig();
+    const chat = conversation(conversationId);
+    const voice = conversationId === 'voice';
+
+    return buildRequest({
+        model: voice ? config.voiceModel : config.model,
+        effort: voice ? config.voiceEffort : config.effort,
+        systemPrompt: voice ? buildVoiceSystemPrompt(preferences.customPrompt) : buildSystemPrompt(preferences.profile, preferences.customPrompt),
+        prompt: prompt || (voice ? preferences.voicePrompt : preferences.defaultPrompt),
+        images,
+        // Голосовое окно отвечает по последним секундам: длинный контекст
+        // уводит модель к прошлой теме вместо только что прозвучавшего вопроса.
+        transcript: useTranscript ? getTranscriptForRequest(voice ? VOICE_WINDOW_MS : undefined) : '',
+        history: historyWithoutImages(chat),
+    });
+}
+
+async function ask({ images = [], prompt = '', useTranscript = false, conversation: conversationId = 'main' }) {
+    const chat = conversation(conversationId);
+    const id = chat.gate.begin();
     // Событие уходит в интерфейс, только если запрос ещё актуален: иначе
     // ошибка прерывания и куски текста вытесненного запроса смешаются с новым.
     const emit = (channel, payload) => {
-        if (gate.isCurrent(id)) {
-            send(channel, payload);
+        if (chat.gate.isCurrent(id)) {
+            send(conversationId, channel, payload);
         }
     };
 
-    if (activeStream) {
-        activeStream.abort();
-        activeStream = null;
+    if (chat.activeStream) {
+        chat.activeStream.abort();
+        chat.activeStream = null;
     }
-
-    const preferences = storage.getPreferences();
-    const config = storage.getConfig();
 
     let request;
     try {
-        request = buildRequest({
-            model: config.model,
-            effort: config.effort,
-            systemPrompt: buildSystemPrompt(preferences.profile, preferences.customPrompt),
-            prompt: prompt || preferences.defaultPrompt,
-            images,
-            transcript: useTranscript ? getTranscriptForRequest() : '',
-            history: historyWithoutImages(),
-        });
+        request = requestFor(conversationId, { images, prompt, useTranscript });
     } catch (error) {
         emit('claude:error', { message: error.message, retryable: false });
         return { success: false };
@@ -103,15 +126,15 @@ async function ask({ images = [], prompt = '', useTranscript = false }) {
 
     try {
         const stream = getClient().messages.stream(request);
-        activeStream = stream;
+        chat.activeStream = stream;
 
         stream.on('text', delta => emit('claude:delta', delta));
 
         const message = await stream.finalMessage();
-        if (!gate.isCurrent(id)) {
+        if (!chat.gate.isCurrent(id)) {
             return { success: false };
         }
-        activeStream = null;
+        chat.activeStream = null;
 
         if (message.stop_reason === 'refusal') {
             const category = (message.stop_details && message.stop_details.category) || 'без категории';
@@ -124,17 +147,17 @@ async function ask({ images = [], prompt = '', useTranscript = false }) {
             .map(block => block.text)
             .join('');
 
-        rememberTurn(request.messages.at(-1).content, answer);
+        rememberTurn(chat, request.messages.at(-1).content, answer);
         emit('claude:done', { text: answer, usage: message.usage, model: message.model });
         return { success: true };
     } catch (error) {
-        if (!gate.isCurrent(id)) {
+        if (!chat.gate.isCurrent(id)) {
             // Запрос вытеснен новым — его падение ожидаемо и никого не касается.
             return { success: false };
         }
-        activeStream = null;
+        chat.activeStream = null;
         const normalized = normalizeApiError(error);
-        console.error('Claude request failed:', normalized.kind, normalized.message);
+        console.error(`Claude request failed (${conversationId}):`, normalized.kind, normalized.message);
         emit('claude:error', normalized);
         return { success: false };
     }
@@ -143,18 +166,21 @@ async function ask({ images = [], prompt = '', useTranscript = false }) {
 function setupClaudeIpcHandlers() {
     ipcMain.handle('claude:ask', async (event, payload) => ask(payload || {}));
 
-    ipcMain.handle('claude:cancel', async () => {
-        gate.cancel();
-        if (activeStream) {
-            activeStream.abort();
-            activeStream = null;
+    ipcMain.handle('claude:cancel', async (event, conversationId = 'main') => {
+        const chat = conversation(conversationId);
+        chat.gate.cancel();
+        if (chat.activeStream) {
+            chat.activeStream.abort();
+            chat.activeStream = null;
         }
         return { success: true };
     });
 
-    ipcMain.handle('claude:reset', async () => {
-        resetHistory();
-        clearTranscript();
+    ipcMain.handle('claude:reset', async (event, conversationId = 'main') => {
+        resetHistory(conversationId);
+        if (conversationId === 'main') {
+            clearTranscript();
+        }
         return { success: true };
     });
 
@@ -179,7 +205,8 @@ function setupClaudeIpcHandlers() {
 }
 
 module.exports = {
-    setMainWindow,
+    VOICE_WINDOW_MS,
+    setWindow,
     setupClaudeIpcHandlers,
     resetHistory,
     ask,

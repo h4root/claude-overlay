@@ -5,7 +5,7 @@ if (require('electron-squirrel-startup')) {
 }
 
 const { app, BrowserWindow, shell, ipcMain, desktopCapturer, session, powerMonitor } = require('electron');
-const { createWindow, updateGlobalShortcuts } = require('./utils/window');
+const { createWindow, createVoiceWindow, updateGlobalShortcuts } = require('./utils/window');
 const { mergeKeybinds } = require('./utils/keybinds');
 const claude = require('./utils/claude');
 const audio = require('./utils/audio');
@@ -15,11 +15,16 @@ const storage = require('./storage');
 const { buildProxyRules, validateProxy } = require('./utils/proxy');
 
 let mainWindow = null;
+let voiceWindow = null;
 
 function createMainWindow() {
     mainWindow = createWindow();
-    claude.setMainWindow(mainWindow);
-    audio.setMainWindow(mainWindow);
+    voiceWindow = createVoiceWindow();
+
+    claude.setWindow('main', mainWindow);
+    claude.setWindow('voice', voiceWindow);
+    audio.setWindows([mainWindow, voiceWindow]);
+
     return mainWindow;
 }
 
@@ -132,6 +137,18 @@ function setupStorageIpcHandlers() {
 
 function setupGeneralIpcHandlers() {
     handle('get-app-version', () => app.getVersion());
+
+    handle('voice:show', () => {
+        if (voiceWindow && !voiceWindow.isDestroyed()) {
+            voiceWindow.showInactive();
+        }
+    });
+
+    handle('voice:hide', () => {
+        if (voiceWindow && !voiceWindow.isDestroyed()) {
+            voiceWindow.hide();
+        }
+    });
 
     handle('quit-application', () => {
         app.quit();

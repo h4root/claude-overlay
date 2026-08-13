@@ -556,6 +556,10 @@ export class OverlayApp extends LitElement {
         });
     }
 
+    get voiceModel() {
+        return this.models.find(model => model.id === this.config.voiceModel) || { efforts: [] };
+    }
+
     get currentModel() {
         return this.models.find(model => model.id === this.config.model) || { efforts: [] };
     }
@@ -695,6 +699,7 @@ export class OverlayApp extends LitElement {
 
         if (this.preferences.listenInSession && !this.listening) {
             await this.toggleListening();
+            await window.overlay.voice.show();
         }
 
         await window.overlay.window.setMode('session');
@@ -703,6 +708,7 @@ export class OverlayApp extends LitElement {
     }
 
     async openSetup() {
+        await window.overlay.voice.hide();
         await window.overlay.window.setMode('setup');
         this.view = 'setup';
     }
@@ -725,21 +731,12 @@ export class OverlayApp extends LitElement {
         }
     }
 
+    // Ответ по речи уходит в отдельное окно: основной чат по экрану он не
+    // трогает. Захват живёт здесь, поэтому сброс буфера тоже отсюда.
     async askVoice() {
-        this.status = 'busy';
-        this.error = '';
-
-        // Дожидаемся расшифровки последних секунд: иначе в запрос уйдёт всё,
-        // кроме только что прозвучавшего вопроса.
-        const { text } = await window.overlay.listen.flush();
-        this.transcriptText = text;
-
-        if (!text) {
-            this.status = 'idle';
-            this.error = 'Расшифровка пуста — пока нечего разбирать.';
-            return;
-        }
-        await window.overlay.ask({ prompt: this.preferences.voicePrompt, useTranscript: true });
+        await window.overlay.voice.show();
+        await window.overlay.listen.flush();
+        await window.overlay.ask({ useTranscript: true, conversation: 'voice' });
     }
 
     async askFollowUp(event) {
@@ -832,7 +829,7 @@ export class OverlayApp extends LitElement {
         const keys = this.keybinds;
         return html`<div class="hints">
             <span><kbd>${keys.capture}</kbd> снять экран</span>
-            <span><kbd>${keys.askVoice}</kbd> по услышанному</span>
+            <span><kbd>${keys.askVoice}</kbd> голос → попап</span>
             <span><kbd>${keys.toggleClickThrough}</kbd> насквозь</span>
             <span><kbd>${keys.toggleVisibility}</kbd> скрыть</span>
             <span><kbd>${keys.newSession}</kbd> сброс</span>
@@ -1116,6 +1113,41 @@ export class OverlayApp extends LitElement {
                             : ''
                     }
                     ${this.preferences.listenInSession ? this.renderWhisperField() : ''}
+                    ${
+                        this.preferences.listenInSession
+                            ? html`<div class="row">
+                                  <div class="field">
+                                      <label>Модель для голоса</label>
+                                      <select @change=${e => this.setConfig('voiceModel', e.target.value)}>
+                                          ${this.models.map(
+                                              item =>
+                                                  html`<option value=${item.id} ?selected=${item.id === this.config.voiceModel}>
+                                                      ${item.label}
+                                                  </option>`
+                                          )}
+                                      </select>
+                                  </div>
+                                  <div class="field">
+                                      <label>Эффорт голоса</label>
+                                      <select
+                                          @change=${e => this.setConfig('voiceEffort', e.target.value)}
+                                          ?disabled=${this.voiceModel.efforts.length === 0}
+                                      >
+                                          ${
+                                              this.voiceModel.efforts.length === 0
+                                                  ? html`<option value="">—</option>`
+                                                  : this.voiceModel.efforts.map(
+                                                        level =>
+                                                            html`<option value=${level} ?selected=${level === this.config.voiceEffort}>
+                                                                ${level}
+                                                            </option>`
+                                                    )
+                                          }
+                                      </select>
+                                  </div>
+                              </div>`
+                            : ''
+                    }
                     ${
                         this.preferences.listenInSession
                             ? html`<div class="field">

@@ -160,6 +160,36 @@ describe('RollingTranscript.formatted', () => {
         expect(buffer.formatted(60000)).toBe('[1 мин назад] реплика');
     });
 
+    // Голосовое окно спрашивает по последним секундам, но основное окно должно
+    // сохранить свою десятиминутную память — срез не имеет права её испортить.
+    it('срез по возрасту отдаёт только свежие реплики', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('старое', 0);
+        buffer.add('свежее', 100000);
+        expect(buffer.formatted(100000, { maxAgeMs: 20000 })).toBe('[только что] свежее');
+    });
+
+    it('срез не выбрасывает реплики из буфера', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('старое', 0);
+        buffer.add('свежее', 100000);
+        buffer.formatted(100000, { maxAgeMs: 20000 });
+        expect(buffer.text(100000)).toBe('старое свежее');
+    });
+
+    it('если за срез ничего не попало, отдаёт пустую строку', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('давнее', 0);
+        expect(buffer.formatted(100000, { maxAgeMs: 20000 })).toBe('');
+    });
+
+    it('без среза ведёт себя как раньше', () => {
+        const buffer = new RollingTranscript();
+        buffer.add('старое', 0);
+        buffer.add('свежее', 100000);
+        expect(buffer.formatted(100000)).toContain('старое');
+    });
+
     it('выпавшие по окну реплики в разметку не попадают', () => {
         const buffer = new RollingTranscript({ windowMs: 60000 });
         buffer.add('древнее', 0);

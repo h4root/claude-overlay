@@ -8,6 +8,7 @@ const { purgeNow } = require('./whisper');
 
 const SETUP_SIZE = { width: 560, height: 620 };
 const SESSION_SIZE = { width: 480, height: 380 };
+const VOICE_SIZE = { width: 400, height: 300 };
 const MIN_SIZE = { width: 360, height: 220 };
 
 let clickThrough = false;
@@ -67,10 +68,51 @@ function createWindow() {
     return mainWindow;
 }
 
+// Попап живёт отдельным окном: расшифровка и ответы по речи не должны
+// мешать работе с основным чатом по экрану.
+function createVoiceWindow() {
+    const { workArea } = screen.getPrimaryDisplay();
+    const voiceWindow = new BrowserWindow({
+        width: VOICE_SIZE.width,
+        height: VOICE_SIZE.height,
+        x: workArea.x + workArea.width - VOICE_SIZE.width - 24,
+        y: workArea.y + workArea.height - VOICE_SIZE.height - 24,
+        minWidth: 280,
+        minHeight: 160,
+        resizable: true,
+        frame: false,
+        transparent: true,
+        hasShadow: false,
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        show: false,
+        backgroundColor: '#00000000',
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+            backgroundThrottling: false,
+        },
+    });
+
+    applyContentProtection(voiceWindow, true);
+    voiceWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+    voiceWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    if (process.platform === 'darwin') {
+        try {
+            voiceWindow.setHiddenInMissionControl(true);
+        } catch (error) {
+            console.warn('Не удалось скрыть попап из Mission Control:', error.message);
+        }
+    }
+
+    voiceWindow.loadFile(path.join(__dirname, '../voice.html'));
+    return voiceWindow;
+}
+
 // Единственное место, где меняется защита: иначе флаг для индикатора
 // незаметно разъезжается с реальным состоянием окна.
-function applyContentProtection(mainWindow, enabled) {
-    mainWindow.setContentProtection(enabled);
+function applyContentProtection(targetWindow, enabled) {
+    targetWindow.setContentProtection(enabled);
     contentProtected = enabled;
 }
 
@@ -183,5 +225,6 @@ function setupWindowIpcHandlers(mainWindow) {
 
 module.exports = {
     createWindow,
+    createVoiceWindow,
     updateGlobalShortcuts,
 };
