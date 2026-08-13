@@ -5,6 +5,9 @@
 const DEFAULT_WINDOW_MS = 600000;
 const DEFAULT_MAX_CHARS = 6000;
 const MIN_OVERLAP_WORDS = 2;
+// Слова короче этого сравниваем только точно: на «он» и «от» допуск в одну
+// букву склеил бы несвязанные реплики.
+const MIN_FUZZY_LENGTH = 4;
 // Пауза, после которой реплика считается новым куском разговора.
 const PAUSE_MS = 45000;
 const RECENT_MS = 45000;
@@ -17,11 +20,51 @@ function ageLabel(ageMs) {
 }
 
 function normalizeWord(word) {
-    return word.toLowerCase().replace(/[.,!?…:;"'«»()-]/g, '');
+    return word
+        .toLowerCase()
+        .replace(/ё/g, 'е')
+        .replace(/[.,!?…:;"'«»()-]/g, '');
 }
 
-function wordsEqual(left, right) {
-    return left.length === right.length && left.every((word, index) => word === right[index]);
+function editDistance(left, right, limit) {
+    if (Math.abs(left.length - right.length) > limit) {
+        return limit + 1;
+    }
+
+    let previous = Array.from({ length: right.length + 1 }, (unused, index) => index);
+    for (let i = 1; i <= left.length; i += 1) {
+        const current = [i];
+        let best = i;
+        for (let j = 1; j <= right.length; j += 1) {
+            const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+            current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+            best = Math.min(best, current[j]);
+        }
+        if (best > limit) {
+            return limit + 1;
+        }
+        previous = current;
+    }
+    return previous[right.length];
+}
+
+// Одну и ту же секунду соседние окна распознают по-разному: чаще всего
+// расходится окончание слова. Требовать точного совпадения — значит
+// оставлять заикание в расшифровке почти на каждом стыке.
+function wordsSimilar(left, right) {
+    if (left === right) {
+        return true;
+    }
+    const shortest = Math.min(left.length, right.length);
+    if (shortest < MIN_FUZZY_LENGTH) {
+        return false;
+    }
+    const allowance = Math.max(left.length, right.length) >= 8 ? 2 : 1;
+    return editDistance(left, right, allowance) <= allowance;
+}
+
+function sequencesMatch(left, right) {
+    return left.length === right.length && left.every((word, index) => wordsSimilar(word, right[index]));
 }
 
 // Соседние окна распознавания перекрываются, поэтому начало нового фрагмента
@@ -34,7 +77,7 @@ function dropRepeatedHead(previous, next) {
     for (let size = limit; size >= MIN_OVERLAP_WORDS; size -= 1) {
         const tail = previousWords.slice(previousWords.length - size).map(normalizeWord);
         const head = nextWords.slice(0, size).map(normalizeWord);
-        if (wordsEqual(tail, head)) {
+        if (sequencesMatch(tail, head)) {
             return nextWords.slice(size).join(' ');
         }
     }
