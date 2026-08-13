@@ -71,6 +71,24 @@ function buildUserContent(images, prompt, transcript) {
     return content;
 }
 
+function withoutImages(message) {
+    return { role: message.role, content: message.content.filter(block => block.type !== 'image') };
+}
+
+// Уточняющий вопрос задают про тот же экран, поэтому картинку последнего хода
+// надо сохранить. А если пришёл новый скриншот, старый только дублирует его —
+// и оплачивается наравне с ним.
+function prepareHistory(history, keepLastImages) {
+    if (!keepLastImages) {
+        return history.map(withoutImages);
+    }
+    const lastWithImage = history.reduce(
+        (found, message, index) => (message.content.some(block => block.type === 'image') ? index : found),
+        -1
+    );
+    return history.map((message, index) => (index === lastWithImage ? message : withoutImages(message)));
+}
+
 function buildRequest({ model: modelId, effort, systemPrompt, prompt, images = [], history = [], maxTokens, transcript }) {
     const model = getModel(modelId);
     const text = (prompt || '').trim();
@@ -83,7 +101,7 @@ function buildRequest({ model: modelId, effort, systemPrompt, prompt, images = [
     const request = {
         model: model.id,
         max_tokens: Math.min(maxTokens || DEFAULT_MAX_TOKENS, model.maxOutputTokens),
-        messages: [...history, { role: 'user', content: buildUserContent(images, text, speech) }],
+        messages: [...prepareHistory(history, images.length === 0), { role: 'user', content: buildUserContent(images, text, speech) }],
     };
 
     if (systemPrompt) {

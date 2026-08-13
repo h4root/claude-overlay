@@ -713,6 +713,8 @@ export class OverlayApp extends LitElement {
         this.view = 'setup';
     }
 
+    // Текст из поля уходит вместе со скриншотом: «объясни этот запрос» и
+    // «реши эту задачу» — разные вопросы к одной и той же картинке.
     async capture() {
         if (!this.hasApiKey) {
             this.error = 'Сначала укажи API-ключ.';
@@ -720,23 +722,26 @@ export class OverlayApp extends LitElement {
         }
         this.status = 'busy';
         this.error = '';
+
+        const field = this.renderRoot.querySelector('footer input');
+        const prompt = field ? field.value.trim() : '';
+        if (field) {
+            field.value = '';
+        }
+
         try {
             const image = await window.overlay.captureScreen();
             this.screenOk = true;
-            await window.overlay.ask({ images: [image], useTranscript: Boolean(this.preferences.transcriptWithScreenshot) });
+            await window.overlay.ask({
+                images: [image],
+                prompt,
+                useTranscript: Boolean(this.preferences.transcriptWithScreenshot),
+            });
         } catch (error) {
             this.screenOk = false;
             this.status = 'idle';
             this.error = error.message;
         }
-    }
-
-    // Ответ по речи уходит в отдельное окно: основной чат по экрану он не
-    // трогает. Захват живёт здесь, поэтому сброс буфера тоже отсюда.
-    async askVoice() {
-        await window.overlay.voice.show();
-        await window.overlay.listen.flush();
-        await window.overlay.ask({ useTranscript: true, conversation: 'voice' });
     }
 
     async askFollowUp(event) {
@@ -889,7 +894,11 @@ export class OverlayApp extends LitElement {
             ${this.renderTranscriptStrip()}
 
             <footer>
-                <input type="text" placeholder="Уточняющий вопрос…" @keydown=${e => e.key === 'Enter' && this.askFollowUp(e)} />
+                <input
+                    type="text"
+                    placeholder="Вопрос: Enter — без экрана, Alt+Space — со скриншотом"
+                    @keydown=${e => e.key === 'Enter' && this.askFollowUp(e)}
+                />
                 <button class="primary" @click=${this.capture} ?disabled=${this.status === 'busy'}>Снять экран</button>
             </footer>
 

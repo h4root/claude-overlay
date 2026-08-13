@@ -71,6 +71,59 @@ describe('buildRequest: сообщение пользователя', () => {
     });
 });
 
+describe('buildRequest: картинки в истории', () => {
+    const shot = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } };
+
+    function history() {
+        return [
+            { role: 'user', content: [shot, { type: 'text', text: 'что тут?' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'вот что' }] },
+            { role: 'user', content: [shot, { type: 'text', text: 'а теперь?' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'а теперь так' }] },
+        ];
+    }
+
+    function imagesIn(message) {
+        return message.content.filter(block => block.type === 'image').length;
+    }
+
+    // Уточняющий вопрос задают про тот же экран: без картинки модель отвечает
+    // вслепую, по одному своему прошлому тексту.
+    it('без нового скриншота сохраняет картинку последнего хода', () => {
+        const request = buildRequest({ model: 'claude-opus-5', prompt: 'объясни подробнее', images: [], history: history() });
+        const previousTurns = request.messages.slice(0, -1);
+        expect(imagesIn(previousTurns[2])).toBe(1);
+    });
+
+    it('картинки более ранних ходов вырезает всегда', () => {
+        const request = buildRequest({ model: 'claude-opus-5', prompt: 'объясни', images: [], history: history() });
+        expect(imagesIn(request.messages[0])).toBe(0);
+    });
+
+    // Новый скриншот делает старый лишним, а платим мы за оба.
+    it('с новым скриншотом вырезает все картинки из истории', () => {
+        const request = buildRequest({ model: 'claude-opus-5', prompt: 'что тут', images: [PNG], history: history() });
+        const previousTurns = request.messages.slice(0, -1);
+        expect(previousTurns.every(message => imagesIn(message) === 0)).toBe(true);
+        expect(imagesIn(request.messages.at(-1))).toBe(1);
+    });
+
+    it('текст истории не теряется', () => {
+        const request = buildRequest({ model: 'claude-opus-5', prompt: 'дальше', images: [], history: history() });
+        const texts = request.messages.slice(0, -1).flatMap(m => m.content.filter(b => b.type === 'text').map(b => b.text));
+        expect(texts).toEqual(['что тут?', 'вот что', 'а теперь?', 'а теперь так']);
+    });
+
+    it('ответы ассистента не трогает', () => {
+        const request = buildRequest({ model: 'claude-opus-5', prompt: 'дальше', images: [], history: history() });
+        expect(request.messages[1]).toEqual({ role: 'assistant', content: [{ type: 'text', text: 'вот что' }] });
+    });
+
+    it('пустая история ничего не ломает', () => {
+        expect(buildRequest({ model: 'claude-opus-5', prompt: 'привет', images: [], history: [] }).messages).toHaveLength(1);
+    });
+});
+
 describe('buildRequest: расшифровка разговора', () => {
     function blocksOf(request) {
         return request.messages.at(-1).content;

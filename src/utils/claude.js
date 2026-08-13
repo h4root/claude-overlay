@@ -68,15 +68,6 @@ function resetHistory(id) {
     conversation(id).history = [];
 }
 
-// История хранится с картинками только для последнего хода: изображения
-// в предыдущих ходах раздувают запрос, а ценность несут редко.
-function historyWithoutImages(chat) {
-    return chat.history.map(message => ({
-        role: message.role,
-        content: message.content.filter(block => block.type !== 'image'),
-    }));
-}
-
 const VOICE_WINDOW_MS = 20000;
 
 function requestFor(conversationId, { images, prompt, useTranscript }) {
@@ -94,7 +85,7 @@ function requestFor(conversationId, { images, prompt, useTranscript }) {
         // Голосовое окно отвечает по последним секундам: длинный контекст
         // уводит модель к прошлой теме вместо только что прозвучавшего вопроса.
         transcript: useTranscript ? getTranscriptForRequest(voice ? VOICE_WINDOW_MS : undefined) : '',
-        history: historyWithoutImages(chat),
+        history: chat.history,
     });
 }
 
