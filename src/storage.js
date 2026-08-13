@@ -10,6 +10,7 @@ const DEFAULT_CONFIG = {
     configVersion: CONFIG_VERSION,
     model: 'claude-sonnet-5',
     effort: 'medium',
+    baseUrl: '',
     voiceModel: 'claude-sonnet-5',
     voiceEffort: 'low',
     proxy: { enabled: false, scheme: 'socks5', host: '127.0.0.1', port: 1080 },

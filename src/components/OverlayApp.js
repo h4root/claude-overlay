@@ -52,6 +52,8 @@ export class OverlayApp extends LitElement {
         cost: { state: true },
         proxyDraft: { state: true },
         proxyError: { state: true },
+        baseUrlDraft: { state: true },
+        baseUrlError: { state: true },
         keybindFailed: { state: true },
         recordingAction: { state: true },
         displays: { state: true },
@@ -477,6 +479,8 @@ export class OverlayApp extends LitElement {
         this.cost = { requests: 0, dollars: 0 };
         this.proxyDraft = null;
         this.proxyError = '';
+        this.baseUrlDraft = '';
+        this.baseUrlError = '';
         this.keybindFailed = [];
         this.recordingAction = '';
         this.displays = 1;
@@ -493,6 +497,7 @@ export class OverlayApp extends LitElement {
         this.models = await window.overlay.models();
         this.config = await window.overlay.storage.getConfig();
         this.proxyDraft = { ...this.config.proxy };
+        this.baseUrlDraft = this.config.baseUrl || '';
         this.preferences = await window.overlay.storage.getPreferences();
         const loaded = await window.overlay.keybinds.load();
         this.keybinds = loaded.keybinds;
@@ -771,8 +776,22 @@ export class OverlayApp extends LitElement {
         });
     }
 
+    async saveBaseUrl() {
+        this.baseUrlError = '';
+        try {
+            await window.overlay.storage.setBaseUrl(this.baseUrlDraft);
+            this.config = await window.overlay.storage.getConfig();
+            // Адрес сменился — прошлая проверка ключа больше ничего не значит.
+            this.keyCheck = null;
+        } catch (error) {
+            this.baseUrlError = error.message;
+        }
+    }
+
     async saveProxy() {
         this.proxyError = '';
+        this.baseUrlDraft = '';
+        this.baseUrlError = '';
         this.keybindFailed = [];
         this.recordingAction = '';
         this.displays = 1;
@@ -1145,6 +1164,24 @@ export class OverlayApp extends LitElement {
         </div>`;
     }
 
+    renderBaseUrlField() {
+        const active = (this.config.baseUrl || '').trim();
+        return html`<div class="field">
+            <label>Свой адрес API — если ключ идёт через шлюз</label>
+            <div class="inline">
+                <input
+                    type="text"
+                    placeholder="пусто — напрямую в Anthropic"
+                    .value=${this.baseUrlDraft}
+                    @input=${e => (this.baseUrlDraft = e.target.value)}
+                />
+                <button @click=${this.saveBaseUrl}>Применить</button>
+            </div>
+            ${active ? html`<span class="note fail">Ключ уходит на ${active}, а не в Anthropic напрямую. Доверяй этому адресу.</span>` : ''}
+            ${this.baseUrlError ? html`<span class="note fail">${this.baseUrlError}</span>` : ''}
+        </div>`;
+    }
+
     renderProxyField() {
         const draft = this.proxyDraft || {};
         const update = (key, value) => {
@@ -1228,7 +1265,7 @@ export class OverlayApp extends LitElement {
 
             <main>
                 <div class="setup">
-                    ${this.renderKeyField()} ${this.renderProxyField()}
+                    ${this.renderKeyField()} ${this.renderBaseUrlField()} ${this.renderProxyField()}
 
                     <div class="row">
                         <div class="field">

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import client from './claude-client.js';
 
-const { MODELS, getModel, buildRequest, normalizeApiError, maskKey } = client;
+const { MODELS, getModel, buildRequest, normalizeApiError, maskKey, normalizeBaseUrl } = client;
 
 const PNG = { mediaType: 'image/png', data: 'aGVsbG8=' };
 
@@ -252,5 +252,65 @@ describe('maskKey', () => {
     it('не падает на пустом значении', () => {
         expect(maskKey('')).toBe('…');
         expect(maskKey(undefined)).toBe('…');
+    });
+});
+
+
+// По этому адресу уходит API-ключ, поэтому разбор строгий: подсунутый хост
+// означает утечку ключа.
+describe('normalizeBaseUrl', () => {
+    it('пустое значение означает адрес Anthropic по умолчанию', () => {
+        expect(normalizeBaseUrl('')).toBeNull();
+        expect(normalizeBaseUrl('   ')).toBeNull();
+        expect(normalizeBaseUrl(null)).toBeNull();
+    });
+
+    it('принимает https-адрес', () => {
+        expect(normalizeBaseUrl('https://gateway.example.com')).toBe('https://gateway.example.com');
+    });
+
+    it('сохраняет путь шлюза', () => {
+        expect(normalizeBaseUrl('https://gateway.example.com/anthropic')).toBe('https://gateway.example.com/anthropic');
+    });
+
+    // SDK сам дописывает /v1/messages, а адрес шлюза обычно копируют вместе
+    // с /v1 — без обрезки получился бы путь с двумя /v1 и ответ 404.
+    it('срезает хвостовой /v1: его добавит сам SDK', () => {
+        expect(normalizeBaseUrl('https://gateway.example.com/v1')).toBe('https://gateway.example.com');
+        expect(normalizeBaseUrl('https://gateway.example.com/anthropic/v1')).toBe('https://gateway.example.com/anthropic');
+        expect(normalizeBaseUrl('https://gateway.example.com/v1/')).toBe('https://gateway.example.com');
+    });
+
+    it('путь, который лишь оканчивается на v1, не трогает', () => {
+        expect(normalizeBaseUrl('https://gateway.example.com/apiv1')).toBe('https://gateway.example.com/apiv1');
+    });
+
+    it('убирает хвостовой слеш, чтобы путь не удвоился', () => {
+        expect(normalizeBaseUrl('https://gateway.example.com/')).toBe('https://gateway.example.com');
+    });
+
+    // Локальный шлюз вроде LiteLLM живёт на http, и это нормально: трафик
+    // не покидает машину.
+    it('разрешает http только для локального адреса', () => {
+        expect(normalizeBaseUrl('http://localhost:4000')).toBe('http://localhost:4000');
+        expect(normalizeBaseUrl('http://127.0.0.1:4000')).toBe('http://127.0.0.1:4000');
+    });
+
+    it('http на чужой хост отклоняет: ключ ушёл бы открытым текстом', () => {
+        expect(() => normalizeBaseUrl('http://gateway.example.com')).toThrow(/https/i);
+    });
+
+    it('отклоняет учётные данные в адресе', () => {
+        expect(() => normalizeBaseUrl('https://user:secret@gateway.example.com')).toThrow(/учётные|логин|пароль/i);
+    });
+
+    it('отклоняет другие схемы', () => {
+        expect(() => normalizeBaseUrl('ftp://gateway.example.com')).toThrow();
+        expect(() => normalizeBaseUrl('file:///etc/passwd')).toThrow();
+    });
+
+    it('отклоняет мусор', () => {
+        expect(() => normalizeBaseUrl('просто текст')).toThrow(/адрес/i);
+        expect(() => normalizeBaseUrl('gateway.example.com')).toThrow(/адрес/i);
     });
 });

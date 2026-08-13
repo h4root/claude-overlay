@@ -3,7 +3,7 @@
 const { ipcMain, net } = require('electron');
 const Anthropic = require('@anthropic-ai/sdk');
 const storage = require('../storage');
-const { buildRequest, normalizeApiError, maskKey, MODELS } = require('./claude-client');
+const { buildRequest, normalizeApiError, maskKey, normalizeBaseUrl, MODELS } = require('./claude-client');
 const { buildSystemPrompt, buildVoiceSystemPrompt } = require('./prompts');
 const { RequestGate } = require('./request-gate');
 const { getTranscriptForRequest, clearTranscript } = require('./audio');
@@ -13,7 +13,7 @@ const { costOf } = require('./pricing');
 const HISTORY_LIMIT = 12;
 
 let client = null;
-let clientKey = null;
+let clientSignature = '';
 
 // Два независимых диалога: разбор экрана не должен перемешиваться с репликами
 // совещания, и сбрасываются они по отдельности.
@@ -48,12 +48,21 @@ function getClient() {
         error.status = 401;
         throw error;
     }
-    if (!client || clientKey !== apiKey) {
+
+    const baseURL = normalizeBaseUrl(storage.getConfig().baseUrl);
+    // Клиент пересобираем и при смене адреса шлюза, а не только ключа.
+    const signature = `${apiKey}@${baseURL || 'default'}`;
+    if (!client || clientSignature !== signature) {
         // net.fetch идёт через сетевой стек Chromium и потому уважает
         // прокси сессии; обычный fetch Node его игнорирует.
-        client = new Anthropic({ apiKey, maxRetries: 2, fetch: (url, init) => net.fetch(url, init) });
-        clientKey = apiKey;
-        console.log(`Claude client готов, ключ ${maskKey(apiKey)}`);
+        client = new Anthropic({
+            apiKey,
+            maxRetries: 2,
+            fetch: (url, init) => net.fetch(url, init),
+            ...(baseURL ? { baseURL } : {}),
+        });
+        clientSignature = signature;
+        console.log(`Claude client готов, ключ ${maskKey(apiKey)}, адрес ${baseURL || 'по умолчанию'}`);
     }
     return client;
 }

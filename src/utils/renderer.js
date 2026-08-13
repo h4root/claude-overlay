@@ -39,6 +39,7 @@ const overlay = {
         setApiKey: apiKey => unwrap('storage:set-api-key', apiKey),
         clearAll: () => unwrap('storage:clear-all'),
         setProxy: proxy => unwrap('proxy:set', proxy),
+        setBaseUrl: value => unwrap('base-url:set', value),
     },
 
     models: () => ipcRenderer.invoke('claude:models'),

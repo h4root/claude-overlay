@@ -14,6 +14,7 @@ const { purgeNow, purgeOrphans } = require('./utils/whisper');
 const sessions = require('./utils/sessions');
 const storage = require('./storage');
 const { buildProxyRules, validateProxy } = require('./utils/proxy');
+const { normalizeBaseUrl } = require('./utils/claude-client');
 
 let mainWindow = null;
 let voiceWindow = null;
@@ -132,6 +133,13 @@ function setupStorageIpcHandlers() {
         }
         storage.updateConfig('proxy', proxy);
         await applyProxy();
+        return true;
+    });
+
+    handle('base-url:set', value => {
+        // Проверяем до сохранения: неверный адрес не должен доживать до запроса.
+        normalizeBaseUrl(value);
+        storage.updateConfig('baseUrl', String(value || '').trim());
         return true;
     });
 

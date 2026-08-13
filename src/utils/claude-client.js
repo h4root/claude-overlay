@@ -117,6 +117,41 @@ function buildRequest({ model: modelId, effort, systemPrompt, prompt, images = [
     return request;
 }
 
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
+
+// По этому адресу уходит API-ключ. Схему и наличие учётных данных проверяем
+// строго: подменённый хост означает утечку ключа, а http на чужой хост —
+// отправку его открытым текстом.
+function normalizeBaseUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return null;
+    }
+
+    let url;
+    try {
+        url = new URL(raw);
+    } catch {
+        throw new Error('Некорректный адрес шлюза: нужен полный URL со схемой');
+    }
+
+    if (url.username || url.password) {
+        throw new Error('Учётные данные в адресе шлюза не принимаются');
+    }
+
+    const local = LOCAL_HOSTS.includes(url.hostname);
+    if (url.protocol === 'http:' && !local) {
+        throw new Error('Только https: по http ключ ушёл бы открытым текстом');
+    }
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
+        throw new Error('Некорректный адрес шлюза: поддерживаются только http и https');
+    }
+
+    // SDK дописывает /v1/messages сам: адрес шлюза, скопированный вместе
+    // с /v1, дал бы путь с двумя /v1 и невнятный 404.
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, '').replace(/\/v1$/, '');
+}
+
 function redact(value) {
     return String(value || '').replace(KEY_PATTERN, 'sk-ant-…');
 }
@@ -157,6 +192,7 @@ function maskKey(key) {
 
 module.exports = {
     EFFORT_LEVELS,
+    normalizeBaseUrl,
     MODELS,
     getModel,
     buildRequest,
