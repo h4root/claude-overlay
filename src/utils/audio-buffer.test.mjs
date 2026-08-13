@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import audio from './audio-buffer.js';
 
-const { encodeWav, rms, isSilent, SILENCE_THRESHOLD } = audio;
+const { encodeWav, rms, isSilent, trimSilence, SILENCE_THRESHOLD } = audio;
 
 function readString(buffer, offset, length) {
     return buffer.toString('latin1', offset, offset + length);
@@ -86,5 +86,82 @@ describe('isSilent', () => {
     it('порог по умолчанию отсекает фоновый шум микрофона, но не тихую речь', () => {
         expect(SILENCE_THRESHOLD).toBeGreaterThan(0);
         expect(SILENCE_THRESHOLD).toBeLessThan(0.05);
+    });
+});
+
+// Whisper на тишине уверенно выдумывает текст («Продолжение следует...»),
+// поэтому в кусок должна попадать только речь.
+describe('trimSilence', () => {
+    const RATE = 1000;
+
+    function signal(parts) {
+        const samples = [];
+        for (const [seconds, amplitude] of parts) {
+            for (let index = 0; index < seconds * RATE; index += 1) {
+                samples.push(index % 2 === 0 ? amplitude : -amplitude);
+            }
+        }
+        return Float32Array.from(samples);
+    }
+
+    it('сплошную тишину вырезает целиком', () => {
+        expect(trimSilence(signal([[3, 0]]), RATE).length).toBe(0);
+    });
+
+    it('пустой сигнал отдаёт пустым', () => {
+        expect(trimSilence(new Float32Array(0), RATE).length).toBe(0);
+    });
+
+    it('оставляет речь, отрезая тишину с обеих сторон', () => {
+        const trimmed = trimSilence(
+            signal([
+                [2, 0],
+                [1, 0.3],
+                [3, 0],
+            ]),
+            RATE
+        );
+        expect(trimmed.length).toBeLessThan(2 * RATE);
+        expect(trimmed.length).toBeGreaterThanOrEqual(RATE);
+    });
+
+    it('речь в самом начале не обрезает', () => {
+        const trimmed = trimSilence(
+            signal([
+                [1, 0.3],
+                [4, 0],
+            ]),
+            RATE
+        );
+        expect(trimmed[0]).toBeCloseTo(0.3, 5);
+    });
+
+    it('речь в самом конце не теряет', () => {
+        const trimmed = trimSilence(
+            signal([
+                [4, 0],
+                [1, 0.3],
+            ]),
+            RATE
+        );
+        expect(Math.abs(trimmed.at(-1))).toBeCloseTo(0.3, 5);
+    });
+
+    it('сигнал целиком из речи возвращает как есть', () => {
+        const speech = signal([[2, 0.3]]);
+        expect(trimSilence(speech, RATE).length).toBe(speech.length);
+    });
+
+    // Небольшой запас нужен, чтобы не срезать атаку и затухание слова.
+    it('оставляет запас вокруг речи', () => {
+        const trimmed = trimSilence(
+            signal([
+                [2, 0],
+                [1, 0.3],
+                [2, 0],
+            ]),
+            RATE
+        );
+        expect(trimmed.length).toBeGreaterThan(RATE);
     });
 });

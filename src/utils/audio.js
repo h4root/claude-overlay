@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const storage = require('../storage');
-const { encodeWav, isSilent } = require('./audio-buffer');
+const { encodeWav, isSilent, trimSilence } = require('./audio-buffer');
 const { RollingTranscript } = require('./transcript');
 const { WHISPER_MODELS } = require('./whisper-models');
 const { modelState, transcribe, temporaryWavPath, releaseTemporaryFile, downloadModel } = require('./whisper');
@@ -123,15 +123,21 @@ function acceptChunk(samples, sampleRate) {
     startRun(samples, sampleRate);
 }
 
+const MIN_FLUSH_SPEECH_MS = 400;
+
 // В отличие от обычного окна, этот кусок ждём: без него в запрос уйдёт
 // расшифровка без последней реплики.
 async function flushChunk(samples, sampleRate) {
     if (currentRun) {
         await currentRun.catch(() => {});
     }
-    if (samples.length && !isSilent(samples)) {
-        await runChunk(samples, sampleRate);
+
+    // В хвосте буфера речи обычно секунда, а тишины — несколько.
+    const speech = trimSilence(samples, sampleRate);
+    if (speech.length < (sampleRate * MIN_FLUSH_SPEECH_MS) / 1000) {
+        return;
     }
+    await runChunk(speech, sampleRate);
 }
 
 function setupAudioIpcHandlers() {

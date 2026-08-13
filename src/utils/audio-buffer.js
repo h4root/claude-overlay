@@ -3,6 +3,8 @@
 const WAV_HEADER_BYTES = 44;
 const BYTES_PER_SAMPLE = 2;
 const SILENCE_THRESHOLD = 0.006;
+const FRAME_MS = 20;
+const PADDING_MS = 100;
 
 function clampToInt16(value) {
     if (value > 1) return 32767;
@@ -50,8 +52,34 @@ function isSilent(samples, threshold = SILENCE_THRESHOLD) {
     return rms(samples) < threshold;
 }
 
+// Средний RMS по всему окну пропускает кусок, где секунда речи и девять
+// секунд тишины. Whisper на тихой части выдумывает текст, поэтому в него
+// должна попадать только речь плюс небольшой запас на атаку и затухание.
+function trimSilence(samples, sampleRate, threshold = SILENCE_THRESHOLD) {
+    const frame = Math.max(1, Math.round((sampleRate * FRAME_MS) / 1000));
+    let first = -1;
+    let last = -1;
+
+    for (let start = 0; start < samples.length; start += frame) {
+        if (rms(samples.subarray(start, Math.min(start + frame, samples.length))) >= threshold) {
+            if (first === -1) {
+                first = start;
+            }
+            last = Math.min(start + frame, samples.length);
+        }
+    }
+
+    if (first === -1) {
+        return new Float32Array(0);
+    }
+
+    const padding = Math.round((sampleRate * PADDING_MS) / 1000);
+    return samples.slice(Math.max(0, first - padding), Math.min(samples.length, last + padding));
+}
+
 module.exports = {
     SILENCE_THRESHOLD,
+    trimSilence,
     encodeWav,
     rms,
     isSilent,
