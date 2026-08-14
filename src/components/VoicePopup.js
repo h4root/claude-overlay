@@ -238,7 +238,7 @@ export class VoicePopup extends LitElement {
 
             <main>${this.renderBody()}</main>
 
-            <div class="hint"><kbd>${this.keybind}</kbd> — ответить по последним 20 секундам</div>
+            <div class="hint"><kbd>${this.keybind}</kbd> — ответ по последним 20 секундам</div>
         `;
     }
 }

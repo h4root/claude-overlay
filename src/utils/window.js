@@ -9,7 +9,7 @@ const { purgeNow } = require('./whisper');
 const SETUP_SIZE = { width: 760, height: 560 };
 const SESSION_SIZE = { width: 480, height: 380 };
 const VOICE_SIZE = { width: 400, height: 300 };
-const HINTS_SIZE = { width: 210, height: 108 };
+const HINTS_SIZE = { width: 240, height: 112 };
 const HINTS_MARGIN = 16;
 const MIN_SIZE = { width: 360, height: 220 };
 

@@ -15,9 +15,9 @@ const PROFILES = [
 ];
 
 const QUALITIES = [
-    ['low', 'Низкое — дешевле'],
+    ['low', 'Низкое — дешевле в токенах'],
     ['medium', 'Среднее'],
-    ['high', 'Высокое — мелкий текст'],
+    ['high', 'Высокое — читает мелкий текст'],
 ];
 
 const LANGUAGES = [
@@ -845,7 +845,7 @@ export class OverlayApp extends LitElement {
     // «реши эту задачу» — разные вопросы к одной и той же картинке.
     async capture() {
         if (!this.hasApiKey) {
-            this.error = 'Сначала укажи API-ключ.';
+            this.error = 'Ключ не задан. Вставь его во вкладке «Настройки».';
             return;
         }
         this.status = 'busy';
@@ -1020,7 +1020,7 @@ export class OverlayApp extends LitElement {
                 ${
                     this.answer
                         ? this.renderMarkdown(this.answer)
-                        : html`<div class="empty">Жду вопроса. ${this.keybinds.capture} — снять экран.</div>`
+                        : html`<div class="empty">Пусто. ${this.keybinds.capture} снимет экран и спросит Claude.</div>`
                 }
             </main>
 
@@ -1029,7 +1029,7 @@ export class OverlayApp extends LitElement {
             <footer>
                 <input
                     type="text"
-                    placeholder="Вопрос: Enter — без экрана, ${this.keybinds.capture} — со скриншотом"
+                    placeholder="Свой вопрос — Enter отправит без экрана"
                     @keydown=${event => event.key === 'Enter' && this.askFollowUp(event)}
                 />
                 <button class="primary" @click=${this.capture} ?disabled=${this.status === 'busy'}>Снять экран</button>
@@ -1081,24 +1081,24 @@ export class OverlayApp extends LitElement {
             <div class="group">
                 <div class="head">Звук встречи</div>
                 <div class="card">
-                    ${switchRow('Слушать и расшифровывать локально', 'аудио не покидает машину', sound, value =>
+                    ${switchRow('Слушать встречу', 'распознавание идёт на этой машине, аудио никуда не уходит', sound, value =>
                         this.setPreference('listenInSession', value)
                     )}
                     ${
                         sound
                             ? html`
                                   ${switchRow(
-                                      'Прикладывать расшифровку к экрану',
-                                      'иначе модель отвечает про разговор, а не про экран',
+                                      'Добавлять расшифровку к вопросам по экрану',
+                                      'без неё Claude отвечает только про то, что видит',
                                       this.preferences.transcriptWithScreenshot,
                                       value => this.setPreference('transcriptWithScreenshot', value)
                                   )}
                                   <div class="row">
                                       ${selectRow(
-                                          'Распознавание речи',
+                                          'Модель распознавания',
                                           this.whisperModels.map(item => [
                                               item.id,
-                                              `${item.label}${item.ready ? '' : ' — не скачана'} · ~${item.ramMb} МБ`,
+                                              `${item.label}${item.ready ? '' : ' — не скачана'} · ~${(item.ramMb / 1024).toFixed(1).replace('.', ',')} ГБ памяти`,
                                           ]),
                                           this.preferences.whisperModel,
                                           value => this.setPreference('whisperModel', value)
@@ -1130,12 +1130,12 @@ export class OverlayApp extends LitElement {
                                       ${
                                           voice.efforts.length
                                               ? selectRow(
-                                                    'Эффорт голоса',
+                                                    'Глубина для голоса',
                                                     voice.efforts.map(level => [level, level]),
                                                     this.config.voiceEffort,
                                                     value => this.setConfig('voiceEffort', value)
                                                 )
-                                              : selectRow('Эффорт голоса', [['', 'не поддерживается']], '', () => {})
+                                              : selectRow('Глубина для голоса', [['', 'не поддерживается']], '', () => {})
                                       }
                                   </div>
                                   ${selectRow('Помнить разговор', MEMORY_MINUTES, this.preferences.transcriptWindowMinutes, value =>
@@ -1171,7 +1171,7 @@ export class OverlayApp extends LitElement {
                                 title=${broken ? 'Занято другим приложением' : clashes ? 'Дублируется внутри приложения' : ''}
                                 @click=${() => (recording ? this.stopRecording() : this.startRecording(action.id))}
                             >
-                                ${recording ? 'жми сочетание…' : this.keybinds[action.id]}
+                                ${recording ? 'жми клавиши…' : this.keybinds[action.id]}
                             </button>
                         </div>`;
                     })}
@@ -1179,15 +1179,14 @@ export class OverlayApp extends LitElement {
                 ${
                     this.keybindFailed.length
                         ? html`<span class="note fail">
-                              Занято другим приложением: ${this.keybindFailed.map(item => item.accelerator).join(', ')}
+                              Уже занято другой программой: ${this.keybindFailed.map(item => item.accelerator).join(', ')}
                           </span>`
                         : ''
                 }
-                ${conflicts.length ? html`<span class="note fail">Одно сочетание на несколько действий</span>` : ''}
+                ${conflicts.length ? html`<span class="note fail">Одно сочетание назначено на несколько действий</span>` : ''}
                 <div class="list-row">
                     <span class="grow note">
-                        Всё на Alt намеренно: Cmd+M и Cmd+Enter заняты в macOS повсеместно, а глобальная регистрация отбирает сочетание у всех
-                        приложений сразу.
+                        Сочетание перехватывается во всей системе, поэтому база на Alt: Cmd+M и Cmd+Enter заняты в macOS повсеместно.
                     </span>
                     <button @click=${this.resetKeybinds}>Вернуть умолчания</button>
                 </div>
@@ -1196,10 +1195,13 @@ export class OverlayApp extends LitElement {
             <div class="group">
                 <div class="head">Подсказки поверх экрана</div>
                 <div class="card">
-                    ${switchRow('Показывать во время сессии', 'полупрозрачная плашка у края экрана', this.preferences.hintsVisible, value =>
-                        this.setPreference('hintsVisible', value)
+                    ${switchRow(
+                        'Показывать во время встречи',
+                        'полупрозрачная плашка у края экрана, клики проходят насквозь',
+                        this.preferences.hintsVisible,
+                        value => this.setPreference('hintsVisible', value)
                     )}
-                    ${selectRow('Угол экрана', CORNERS, this.preferences.hintsCorner, value => window.overlay.hints.setCorner(value))}
+                    ${selectRow('Где показывать', CORNERS, this.preferences.hintsCorner, value => window.overlay.hints.setCorner(value))}
                 </div>
             </div>
         `;
@@ -1243,14 +1245,19 @@ export class OverlayApp extends LitElement {
                             />
                             <button @click=${this.saveBaseUrl}>Применить</button>
                         </div>
-                        ${activeBase ? html`<span class="note fail">Ключ уходит на ${activeBase}. Доверяй этому адресу.</span>` : ''}
+                        ${activeBase ? html`<span class="note fail">Ключ уходит на ${activeBase}, а не в Anthropic напрямую.</span>` : ''}
                         ${this.baseUrlError ? html`<span class="note fail">${this.baseUrlError}</span>` : ''}
                     </div>
 
-                    ${switchRow('Пускать запросы через прокси', 'системный ВПН при этом не нужен', proxy.enabled, value => {
-                        this.proxyDraft = { ...this.proxyDraft, enabled: value };
-                        this.saveProxy();
-                    })}
+                    ${switchRow(
+                        'Пускать запросы через прокси',
+                        'через него пойдёт только это приложение, системный ВПН не нужен',
+                        proxy.enabled,
+                        value => {
+                            this.proxyDraft = { ...this.proxyDraft, enabled: value };
+                            this.saveProxy();
+                        }
+                    )}
                     ${
                         proxy.enabled
                             ? html`<div class="inline">
@@ -1301,7 +1308,7 @@ export class OverlayApp extends LitElement {
                         this.displays > 1
                             ? switchRow(
                                   'Снимать монитор под курсором',
-                                  `подключено мониторов: ${this.displays}; иначе снимается основной`,
+                                  `сейчас подключено: ${this.displays}. Иначе снимается основной`,
                                   this.preferences.captureDisplay === 'cursor',
                                   value => this.setPreference('captureDisplay', value ? 'cursor' : 'primary')
                               )
@@ -1316,7 +1323,7 @@ export class OverlayApp extends LitElement {
         if (!this.pastSessions.length) {
             return html`<div class="group">
                 <div class="head">Прошлые сессии</div>
-                <div class="empty">Пока пусто. Каждая сессия сохраняет кадры и лог в свой каталог.</div>
+                <div class="empty">Здесь появятся прошлые встречи. Каждая сохраняет кадры и лог в отдельный каталог.</div>
             </div>`;
         }
 

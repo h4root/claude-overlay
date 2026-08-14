@@ -161,24 +161,24 @@ function normalizeApiError(error) {
     const name = error && error.name;
 
     if (status === 401 || status === 403) {
-        return { kind: 'auth', retryable: false, message: 'API-ключ отклонён. Проверь ключ в настройках.' };
+        return { kind: 'auth', retryable: false, message: 'Ключ отклонён. Проверь его во вкладке «Настройки».' };
     }
     if (status === 429) {
-        return { kind: 'rate_limit', retryable: true, message: 'Лимит запросов исчерпан. Повтори через минуту.' };
+        return { kind: 'rate_limit', retryable: true, message: 'Лимит запросов исчерпан. Через минуту можно повторить.' };
     }
     if (status === 404) {
-        return { kind: 'model', retryable: false, message: 'Модель недоступна для этого ключа.' };
+        return { kind: 'model', retryable: false, message: 'Эта модель недоступна для твоего ключа. Выбери другую.' };
     }
     if (typeof status === 'number' && status >= 500) {
-        return { kind: 'server', retryable: true, message: 'Сервер Anthropic недоступен. Повтори запрос.' };
+        return { kind: 'server', retryable: true, message: 'Сервер Anthropic не отвечает. Повтори запрос.' };
     }
     if (name === 'APIConnectionError' || name === 'APIConnectionTimeoutError') {
-        return { kind: 'network', retryable: true, message: 'Нет связи с API. Проверь интернет.' };
+        return { kind: 'network', retryable: true, message: 'Нет связи с API. Проверь интернет, ВПН или прокси.' };
     }
     return {
         kind: 'unknown',
         retryable: false,
-        message: redact((error && error.message) || 'Неизвестная ошибка запроса'),
+        message: redact((error && error.message) || 'Запрос не прошёл, причина неизвестна'),
     };
 }
 

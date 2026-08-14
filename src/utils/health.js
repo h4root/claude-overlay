@@ -7,44 +7,44 @@ const SEVERITY = { ok: 0, off: 0, warn: 1, fail: 2 };
 
 function keyEntry({ hasKey, keyVerified }) {
     if (keyVerified) {
-        return { state: 'ok', detail: 'Ключ принят, тестовый запрос прошёл' };
+        return { state: 'ok', detail: 'Ключ работает' };
     }
     if (hasKey) {
-        return { state: 'warn', detail: 'Ключ сохранён, но не проверен' };
+        return { state: 'warn', detail: 'Сохранён, но не проверен — нажми «Проверить»' };
     }
-    return { state: 'fail', detail: 'Ключ не задан' };
+    return { state: 'fail', detail: 'Не задан — вкладка «Настройки»' };
 }
 
 function screenEntry({ screenOk }) {
     if (screenOk === true) {
-        return { state: 'ok', detail: 'Снимок экрана получается' };
+        return { state: 'ok', detail: 'Экран снимается' };
     }
     if (screenOk === false) {
-        return { state: 'fail', detail: 'Снять экран не удалось — проверь разрешение «Запись экрана»' };
+        return { state: 'fail', detail: 'Не снимается — разреши «Запись экрана» в настройках системы' };
     }
-    return { state: 'warn', detail: 'Снимок экрана ещё не проверяли' };
+    return { state: 'warn', detail: 'Ещё не снимали' };
 }
 
 function soundEntry({ wantsAudio, listening, lastChunkAt, now }) {
     if (!wantsAudio) {
-        return { state: 'off', detail: 'Звук выключен для этой сессии' };
+        return { state: 'off', detail: 'Выключен для этой сессии' };
     }
     if (!listening) {
-        return { state: 'fail', detail: 'Захват звука не запустился' };
+        return { state: 'fail', detail: 'Захват не запустился — включи заново' };
     }
     if (!lastChunkAt) {
-        return { state: 'warn', detail: 'Звук включён, первое окно ещё не пришло' };
+        return { state: 'warn', detail: 'Включён, первые секунды ещё не обработаны' };
     }
     if (now - lastChunkAt > CHUNK_STALE_MS) {
-        return { state: 'fail', detail: 'Звук перестал поступать — переключи прослушивание' };
+        return { state: 'fail', detail: 'Перестал поступать — выключи и включи заново' };
     }
-    return { state: 'ok', detail: 'Звук поступает, расшифровка идёт' };
+    return { state: 'ok', detail: 'Идёт расшифровка' };
 }
 
 function privacyEntry({ contentProtected }) {
     return contentProtected
-        ? { state: 'ok', detail: 'Окно не попадает в демонстрацию экрана и скриншоты' }
-        : { state: 'fail', detail: 'Защита выключена — окно видно в демонстрации экрана' };
+        ? { state: 'ok', detail: 'Окна не видно в демонстрации экрана и на скриншотах' }
+        : { state: 'fail', detail: 'Выключена — окно попадёт в демонстрацию экрана' };
 }
 
 function buildHealth(input) {

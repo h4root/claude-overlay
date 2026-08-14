@@ -7,11 +7,11 @@ const { ipcRenderer } = require('electron');
 const SHOWN = ['capture', 'askVoice', 'toggleVisibility', 'toggleClickThrough', 'toggleHints'];
 
 const SHORT_LABELS = {
-    capture: 'экран',
+    capture: 'снять экран',
     askVoice: 'по речи',
-    toggleVisibility: 'скрыть',
-    toggleClickThrough: 'насквозь',
-    toggleHints: 'убрать это',
+    toggleVisibility: 'спрятать окно',
+    toggleClickThrough: 'клики насквозь',
+    toggleHints: 'убрать подсказки',
 };
 
 export class HintsOverlay extends LitElement {
