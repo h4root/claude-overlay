@@ -7,6 +7,13 @@ const PATHS = {
     hotkeys: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
     settings: 'M12 15a3 3 0 100-6 3 3 0 000 6zM4 12H2m20 0h-2M12 4V2m0 20v-2M6 6L4.5 4.5M19.5 19.5L18 18M18 6l1.5-1.5M4.5 19.5L6 18',
     history: 'M12 7v5l3 2M3 12a9 9 0 109-9 9 9 0 00-7 3.3M3 4v3.5h3.5',
+    camera: 'M3 8.5A1.5 1.5 0 014.5 7h2L8 5h8l1.5 2h2A1.5 1.5 0 0121 8.5v9A1.5 1.5 0 0119.5 19h-15A1.5 1.5 0 013 17.5zM12 15.5a3 3 0 100-6 3 3 0 000 6z',
+    send: 'M12 19V5M6 11l6-6 6 6',
+    stop: 'M7 7h10v10H7z',
+    copy: 'M9 9h10v10H9zM5 15V5h10',
+    retry: 'M20 12a8 8 0 11-2.3-5.6M20 4v4h-4',
+    down: 'M12 5v14M6 13l6 6 6-6',
+    check: 'M5 13l4 4L19 7',
 };
 
 function icon(name) {

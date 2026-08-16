@@ -67,6 +67,8 @@ export class OverlayApp extends LitElement {
         keyCheck: { state: true },
         turns: { state: true },
         lastRequest: { state: true },
+        atBottom: { state: true },
+        copiedIndex: { state: true },
         status: { state: true },
         error: { state: true },
         listening: { state: true },
@@ -420,26 +422,48 @@ export class OverlayApp extends LitElement {
                 font-size: var(--font-size-sm);
             }
 
-            .turn {
-                margin-bottom: 12px;
+            /* Колонка ограничена по ширине: строка в 100 символов читается
+               заметно хуже, чем в 70, а окно тянут широким. */
+            .column {
+                max-width: 620px;
+                margin: 0 auto;
             }
+
+            .welcome {
+                padding: 28px 4px;
+                text-align: center;
+                font-size: var(--font-size-sm);
+            }
+            .welcome p {
+                margin: 0 0 6px;
+            }
+
+            .turn {
+                margin-bottom: 14px;
+            }
+            /* Реплика пользователя — компактный блок со своим фоном, ответ
+               идёт без рамки во всю колонку: так видно, кто говорит. */
             .turn.user {
+                display: flex;
+                justify-content: flex-end;
+            }
+            .turn.user .bubble {
                 display: flex;
                 gap: 8px;
                 align-items: flex-start;
-                padding: 7px 9px;
-                border-radius: 9px;
-                background: rgba(255, 255, 255, 0.05);
+                max-width: 85%;
+                padding: 7px 10px;
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.07);
             }
             .turn.user .said {
-                flex: 1;
                 min-width: 0;
                 font-size: var(--font-size-sm);
-                color: var(--text-secondary);
+                color: var(--text-primary);
             }
             /* Миниатюра отвечает на вопрос «он вообще тот экран снял?». */
             .turn.user .shot {
-                width: 84px;
+                width: 76px;
                 border-radius: 5px;
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 flex: 0 0 auto;
@@ -449,20 +473,113 @@ export class OverlayApp extends LitElement {
                 margin-right: 5px;
                 padding: 0 5px;
                 border-radius: 4px;
-                background: rgba(255, 255, 255, 0.1);
+                background: rgba(255, 255, 255, 0.12);
                 color: var(--text-muted);
                 font-size: 10px;
             }
             .turn .muted {
                 color: var(--text-muted);
             }
-            .turn .meta {
-                margin-top: 4px;
+
+            /* Действия появляются по наведению: постоянные кнопки под каждым
+               ответом шумят сильнее, чем помогают. */
+            .actions-row {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-top: 5px;
+                opacity: 0;
+                transition: opacity 120ms ease;
+            }
+            .turn.assistant:hover .actions-row,
+            .actions-row:focus-within {
+                opacity: 1;
+            }
+            .meta {
+                margin-right: auto;
                 color: var(--text-muted);
                 font-size: 10px;
                 font-family: var(--font-mono);
             }
+            .ghost-btn {
+                padding: 3px;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                border-radius: 5px;
+            }
+            .ghost-btn:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: var(--text-primary);
+            }
 
+            .to-bottom {
+                position: absolute;
+                right: 14px;
+                bottom: 92px;
+                z-index: 5;
+                width: 26px;
+                height: 26px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                background: rgba(30, 30, 30, 0.95);
+            }
+
+            /* Композер собирает поле и управление в один блок: модель меняют
+               перед отправкой, поэтому ей место здесь, а не в заголовке. */
+            .composer-wrap {
+                flex: 0 0 auto;
+                padding: 8px 12px 12px;
+            }
+            .composer {
+                max-width: 620px;
+                margin: 0 auto;
+                padding: 8px;
+                border-radius: 14px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            .composer:focus-within {
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+            .composer textarea {
+                width: 100%;
+                border: none;
+                background: transparent;
+                padding: 3px 4px;
+                font-size: var(--font-size-sm);
+                line-height: 1.4;
+                resize: none;
+                overflow-y: auto;
+                max-height: 120px;
+            }
+            .composer textarea:focus {
+                outline: none;
+            }
+            .composer .tools {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 6px;
+            }
+            .icon-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 28px;
+                height: 28px;
+                padding: 0;
+                border-radius: 8px;
+            }
+            .icon-btn.stop {
+                border-color: var(--danger);
+                color: var(--danger);
+            }
+
+            .cost {
             .cost {
                 flex: 0 0 auto;
                 color: var(--text-muted);
@@ -564,6 +681,8 @@ export class OverlayApp extends LitElement {
         this.keyCheck = null;
         this.turns = [];
         this.lastRequest = null;
+        this.atBottom = true;
+        this.copiedIndex = -1;
         this.status = 'idle';
         this.error = '';
         this.listening = false;
@@ -741,11 +860,47 @@ export class OverlayApp extends LitElement {
         }
     }
 
-    scrollToBottom() {
+    // Дочитывать старый ответ, пока новый растёт снизу, невозможно, если лента
+    // прыгает вниз сама. Прилипаем только когда пользователь и так внизу.
+    scrollToBottom(force = false) {
         requestAnimationFrame(() => {
             const main = this.renderRoot.querySelector('main');
-            if (main) main.scrollTop = main.scrollHeight;
+            if (!main) return;
+            if (force || this.atBottom) {
+                main.scrollTop = main.scrollHeight;
+            }
         });
+    }
+
+    onScroll(event) {
+        const box = event.target;
+        this.atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 48;
+    }
+
+    async copyTurn(index) {
+        const turn = this.turns[index];
+        if (!turn || !turn.text) return;
+        await navigator.clipboard.writeText(turn.text);
+        this.copiedIndex = index;
+        setTimeout(() => {
+            if (this.copiedIndex === index) this.copiedIndex = -1;
+        }, 1500);
+    }
+
+    // Textarea растёт под текст: вопрос в три строки не должен прокручиваться
+    // в поле высотой в одну.
+    growComposer(event) {
+        const field = event.target;
+        field.style.height = 'auto';
+        field.style.height = `${Math.min(field.scrollHeight, 120)}px`;
+    }
+
+    onComposerKey(event) {
+        if (event.key !== 'Enter' || event.shiftKey) {
+            return;
+        }
+        event.preventDefault();
+        this.askFollowUp({ target: event.target });
     }
 
     async setConfig(key, value) {
@@ -928,10 +1083,11 @@ export class OverlayApp extends LitElement {
         this.status = 'busy';
         this.error = '';
 
-        const field = this.renderRoot.querySelector('footer input');
+        const field = this.renderRoot.querySelector('.composer textarea');
         const prompt = field ? field.value.trim() : '';
         if (field) {
             field.value = '';
+            field.style.height = 'auto';
         }
 
         let image;
@@ -980,6 +1136,7 @@ export class OverlayApp extends LitElement {
         const text = input.value.trim();
         if (!text) return;
         input.value = '';
+        input.style.height = 'auto';
         this.status = 'busy';
         const payload = { prompt: text };
         this.lastRequest = payload;
@@ -993,6 +1150,8 @@ export class OverlayApp extends LitElement {
         this.cost = { ...window.overlay.cost.total() };
         this.turns = [];
         this.lastRequest = null;
+        this.atBottom = true;
+        this.copiedIndex = -1;
         this.error = '';
         this.transcriptText = '';
         this.status = 'idle';
@@ -1002,6 +1161,8 @@ export class OverlayApp extends LitElement {
         await window.overlay.resetConversation();
         this.turns = [];
         this.lastRequest = null;
+        this.atBottom = true;
+        this.copiedIndex = -1;
         this.transcriptText = '';
     }
 
@@ -1066,17 +1227,20 @@ export class OverlayApp extends LitElement {
         ></span>`;
     }
 
-    renderTurn(turn) {
+    renderTurn(turn, index) {
         if (turn.role === 'user') {
             return html`<div class="turn user">
-                ${turn.thumb ? html`<img class="shot" src=${turn.thumb} alt="Отправленный кадр" />` : ''}
-                <div class="said">
-                    ${turn.repeat ? html`<span class="chip">повтор того же кадра</span>` : ''}
-                    ${turn.text || html`<span class="muted">вопрос по экрану</span>`}
+                <div class="bubble">
+                    ${turn.thumb ? html`<img class="shot" src=${turn.thumb} alt="Отправленный кадр" />` : ''}
+                    <div class="said">
+                        ${turn.repeat ? html`<span class="chip">тот же кадр</span>` : ''}
+                        ${turn.text || html`<span class="muted">вопрос по экрану</span>`}
+                    </div>
                 </div>
             </div>`;
         }
 
+        const streaming = this.status === 'busy' && index === this.turns.length - 1;
         return html`<div class="turn assistant">
             ${
                 turn.failed
@@ -1086,8 +1250,14 @@ export class OverlayApp extends LitElement {
                       : html`<span class="muted">думает…</span>`
             }
             ${
-                turn.text && !turn.failed
-                    ? html`<div class="meta">${turn.model}${turn.dollars ? html` · ${window.overlay.cost.format(turn.dollars)}` : ''}</div>`
+                turn.text && !streaming
+                    ? html`<div class="actions-row">
+                          <span class="meta">${turn.model}${turn.dollars ? ` · ${window.overlay.cost.format(turn.dollars)}` : ''}</span>
+                          <button class="ghost-btn" title="Скопировать ответ" @click=${() => this.copyTurn(index)}>
+                              ${icon(this.copiedIndex === index ? 'check' : 'copy')}
+                          </button>
+                          <button class="ghost-btn" title="Спросить снова тем же кадром" @click=${this.retry}>${icon('retry')}</button>
+                      </div>`
                     : ''
             }
         </div>`;
@@ -1108,6 +1278,8 @@ export class OverlayApp extends LitElement {
 
     renderSession() {
         const model = this.currentModel;
+        const busy = this.status === 'busy';
+
         return html`
             <header>
                 ${this.renderHealthDot()}
@@ -1118,20 +1290,7 @@ export class OverlayApp extends LitElement {
                           </span>`
                         : ''
                 }
-                <select @change=${event => this.onModelChange(event.target.value)} title="Модель">
-                    ${this.models.map(item => html`<option value=${item.id} ?selected=${item.id === this.config.model}>${item.label}</option>`)}
-                </select>
-                <select
-                    @change=${event => this.setConfig('effort', event.target.value)}
-                    ?disabled=${model.efforts.length === 0}
-                    title="Глубина рассуждения"
-                >
-                    ${
-                        model.efforts.length === 0
-                            ? html`<option value="">—</option>`
-                            : model.efforts.map(level => html`<option value=${level} ?selected=${level === this.config.effort}>${level}</option>`)
-                    }
-                </select>
+                <span class="title">Сессия</span>
                 <span class="spacer"></span>
                 <span class="cost" title="Потрачено за сессию: ${this.cost.requests} запрос(ов)">
                     ${window.overlay.cost.format(this.cost.dollars)}
@@ -1142,36 +1301,60 @@ export class OverlayApp extends LitElement {
 
             ${this.healthOpen ? this.renderHealthPopover() : ''}
 
-            <main class=${this.preferences.fontSize || 'medium'}>
-                ${
-                    this.turns.length
-                        ? this.turns.map(turn => this.renderTurn(turn))
-                        : html`<div class="empty">Пусто. ${this.keybinds.capture} снимет экран и спросит Claude.</div>`
-                }
-                ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+            <main class=${this.preferences.fontSize || 'medium'} @scroll=${this.onScroll}>
+                <div class="column">
+                    ${
+                        this.turns.length
+                            ? this.turns.map((turn, index) => this.renderTurn(turn, index))
+                            : html`<div class="welcome">
+                                  <p>Спроси про то, что на экране.</p>
+                                  <p class="muted">${this.keybinds.capture} снимет экран · Enter отправит вопрос без кадра</p>
+                              </div>`
+                    }
+                    ${this.error ? html`<div class="error">${this.error}</div>` : ''}
+                </div>
             </main>
 
+            ${
+                !this.atBottom && this.turns.length
+                    ? html`<button class="to-bottom" title="Вниз" @click=${() => this.scrollToBottom(true)}>${icon('down')}</button>`
+                    : ''
+            }
             ${this.renderTranscriptStrip()}
 
-            <footer>
-                <input
-                    type="text"
-                    placeholder="Свой вопрос — Enter отправит без экрана"
-                    @keydown=${event => event.key === 'Enter' && this.askFollowUp(event)}
-                />
-                ${
-                    this.status === 'busy'
-                        ? html`<button @click=${this.cancel} title="Прервать ответ">Стоп</button>`
-                        : html`<button
-                              @click=${this.retry}
-                              ?disabled=${!this.lastRequest}
-                              title="Тот же кадр и вопрос — можно сменить модель в шапке"
-                          >
-                              Повторить
-                          </button>`
-                }
-                <button class="primary" @click=${this.capture} ?disabled=${this.status === 'busy'}>Снять экран</button>
-            </footer>
+            <div class="composer-wrap">
+                <div class="composer">
+                    <textarea rows="1" placeholder="Спросить Claude…" @input=${this.growComposer} @keydown=${this.onComposerKey}></textarea>
+                    <div class="tools">
+                        <select @change=${event => this.onModelChange(event.target.value)} title="Модель">
+                            ${this.models.map(
+                                item => html`<option value=${item.id} ?selected=${item.id === this.config.model}>${item.label}</option>`
+                            )}
+                        </select>
+                        <select
+                            @change=${event => this.setConfig('effort', event.target.value)}
+                            ?disabled=${model.efforts.length === 0}
+                            title="Глубина рассуждения"
+                        >
+                            ${
+                                model.efforts.length === 0
+                                    ? html`<option value="">—</option>`
+                                    : model.efforts.map(
+                                          level => html`<option value=${level} ?selected=${level === this.config.effort}>${level}</option>`
+                                      )
+                            }
+                        </select>
+                        <span class="spacer"></span>
+                        ${
+                            busy
+                                ? html`<button class="icon-btn stop" @click=${this.cancel} title="Прервать ответ">${icon('stop')}</button>`
+                                : html`<button class="icon-btn primary" @click=${this.capture} title="Снять экран и спросить">
+                                      ${icon('camera')}
+                                  </button>`
+                        }
+                    </div>
+                </div>
+            </div>
         `;
     }
 
