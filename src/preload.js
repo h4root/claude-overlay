@@ -1,6 +1,10 @@
 'use strict';
 
-const { ipcRenderer } = require('electron');
+// Мост между страницей и Node живёт здесь. В самой странице Node выключен:
+// contextIsolation отделяет её мир от привилегированного, поэтому XSS или
+// подменённый скрипт не получают доступ к файловой системе и процессам.
+const { contextBridge, ipcRenderer } = require('electron');
+
 const audioCapture = require('./utils/audio-capture');
 const { buildHealth, overallState } = require('./utils/health');
 const { SessionCost, formatUsd, costOf } = require('./utils/pricing');
@@ -16,6 +20,10 @@ async function unwrap(channel, ...args) {
     }
     return result && 'data' in result ? result.data : result;
 }
+
+// Дребезг гасим здесь, а не в компоненте: функция с методами через мост
+// не проходит — за границу пролезает только вызов.
+const savePreferenceSoon = debounce((key, value) => ipcRenderer.invoke('storage:update-preference', key, value), 300);
 
 const overlay = {
     version: () => unwrap('get-app-version'),
@@ -34,6 +42,7 @@ const overlay = {
         updateConfig: (key, value) => unwrap('storage:update-config', key, value),
         getPreferences: () => unwrap('storage:get-preferences'),
         updatePreference: (key, value) => unwrap('storage:update-preference', key, value),
+        updatePreferenceSoon: (key, value) => savePreferenceSoon(key, value),
         getKeybinds: () => unwrap('storage:get-keybinds'),
         hasApiKey: () => unwrap('storage:has-api-key'),
         setApiKey: apiKey => unwrap('storage:set-api-key', apiKey),
@@ -44,7 +53,6 @@ const overlay = {
 
     models: () => ipcRenderer.invoke('claude:models'),
     displays: () => ipcRenderer.invoke('capture:displays'),
-    debounce: (fn, ms) => debounce(fn, ms),
 
     async captureScreen() {
         const result = await ipcRenderer.invoke('capture:screen');
@@ -85,7 +93,7 @@ const overlay = {
     keybinds: {
         load: () => ipcRenderer.invoke('keybinds:get'),
         save: keybinds => ipcRenderer.invoke('keybinds:set', keybinds),
-        actions: () => keybindsModule.ACTIONS,
+        actions: () => keybindsModule.ACTIONS.map(action => ({ ...action })),
         fromEvent: event => keybindsModule.acceleratorFromEvent(event),
         conflicts: map => keybindsModule.findConflicts(map),
     },
@@ -102,7 +110,7 @@ const overlay = {
 
     cost: {
         add: (usage, model) => sessionCost.add(usage, model),
-        total: () => sessionCost.total,
+        total: () => ({ ...sessionCost.total }),
         reset: () => sessionCost.reset(),
         format: dollars => formatUsd(dollars),
         of: (usage, model) => {
@@ -127,4 +135,4 @@ const overlay = {
     },
 };
 
-window.overlay = overlay;
+contextBridge.exposeInMainWorld('overlay', overlay);

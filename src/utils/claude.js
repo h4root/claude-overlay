@@ -3,7 +3,7 @@
 const { ipcMain, net } = require('electron');
 const Anthropic = require('@anthropic-ai/sdk');
 const storage = require('../storage');
-const { buildRequest, normalizeApiError, maskKey, normalizeBaseUrl, MODELS } = require('./claude-client');
+const { buildRequest, normalizeApiError, maskKey, normalizeBaseUrl, prepareHistory, MODELS } = require('./claude-client');
 const { buildSystemPrompt, buildVoiceSystemPrompt } = require('./prompts');
 const { RequestGate } = require('./request-gate');
 const { getTranscriptForRequest, clearTranscript } = require('./audio');
@@ -68,6 +68,9 @@ function getClient() {
 }
 
 function rememberTurn(chat, userContent, answer) {
+    // Кадр весит около двухсот килобайт в base64, а в запрос уходит только
+    // последний: хранить остальные — значит копить их в памяти всю встречу.
+    chat.history = prepareHistory(chat.history, true);
     chat.history.push({ role: 'user', content: userContent });
     chat.history.push({ role: 'assistant', content: [{ type: 'text', text: answer }] });
     if (chat.history.length > HISTORY_LIMIT) {

@@ -192,6 +192,7 @@ function maskKey(key) {
 
 module.exports = {
     EFFORT_LEVELS,
+    prepareHistory,
     normalizeBaseUrl,
     MODELS,
     getModel,

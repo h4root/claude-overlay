@@ -1,7 +1,5 @@
 import { LitElement, html, css } from '../assets/lit-core-2.7.4.min.js';
 
-const { ipcRenderer } = require('electron');
-
 export class VoicePopup extends LitElement {
     static properties = {
         transcript: { state: true },
@@ -142,9 +140,7 @@ export class VoicePopup extends LitElement {
         super.connectedCallback();
 
         const on = (channel, handler) => {
-            const listener = (event, payload) => handler(payload);
-            ipcRenderer.on(channel, listener);
-            this.offs.push(() => ipcRenderer.removeListener(channel, listener));
+            this.offs.push(window.overlay.on(channel, handler));
         };
 
         on('transcript:update', payload => {
@@ -173,7 +169,7 @@ export class VoicePopup extends LitElement {
             this.keybind = payload.accelerator;
         });
 
-        ipcRenderer.invoke('keybinds:get').then(loaded => {
+        window.overlay.keybinds.load().then(loaded => {
             this.keybind = loaded.keybinds.askVoice;
         });
     }
@@ -193,7 +189,7 @@ export class VoicePopup extends LitElement {
     async reset() {
         this.answer = '';
         this.error = '';
-        await ipcRenderer.invoke('claude:reset', 'voice');
+        await window.overlay.resetConversation('voice');
     }
 
     renderMarkdown(text) {
@@ -233,7 +229,7 @@ export class VoicePopup extends LitElement {
                 <span>Голос</span>
                 <span class="spacer"></span>
                 <button @click=${this.reset} title="Очистить">⟲</button>
-                <button @click=${() => ipcRenderer.invoke('voice:hide')} title="Спрятать">✕</button>
+                <button @click=${() => window.overlay.voice.hide()} title="Спрятать">✕</button>
             </header>
 
             <main>${this.renderBody()}</main>

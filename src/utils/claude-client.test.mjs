@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import client from './claude-client.js';
 
-const { MODELS, getModel, buildRequest, normalizeApiError, maskKey, normalizeBaseUrl } = client;
+const { MODELS, getModel, buildRequest, normalizeApiError, maskKey, normalizeBaseUrl, prepareHistory } = client;
 
 const PNG = { mediaType: 'image/png', data: 'aGVsbG8=' };
 
@@ -311,5 +311,50 @@ describe('normalizeBaseUrl', () => {
     it('отклоняет мусор', () => {
         expect(() => normalizeBaseUrl('просто текст')).toThrow(/адрес/i);
         expect(() => normalizeBaseUrl('gateway.example.com')).toThrow(/адрес/i);
+    });
+});
+
+// Кадр весит около двухсот килобайт в base64. Держать в памяти все кадры
+// сессии незачем: в запрос уходит только последний.
+describe('prepareHistory: что остаётся в памяти', () => {
+    const shot = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } };
+
+    function history() {
+        return [
+            { role: 'user', content: [shot, { type: 'text', text: 'первый экран' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'ответ' }] },
+            { role: 'user', content: [shot, { type: 'text', text: 'второй экран' }] },
+            { role: 'assistant', content: [{ type: 'text', text: 'ответ' }] },
+        ];
+    }
+
+    function imageCount(messages) {
+        return messages.reduce((sum, message) => sum + message.content.filter(block => block.type === 'image').length, 0);
+    }
+
+    it('оставляет кадр только у последнего хода с картинкой', () => {
+        const kept = prepareHistory(history(), true);
+        expect(imageCount(kept)).toBe(1);
+        expect(kept[2].content.some(block => block.type === 'image')).toBe(true);
+    });
+
+    // Уточняющий вопрос идёт без своего кадра, но спрашивают про тот же экран.
+    it('кадр переживает текстовый ход, добавленный следом', () => {
+        const withFollowUp = [...history(), { role: 'user', content: [{ type: 'text', text: 'а подробнее?' }] }];
+        expect(imageCount(prepareHistory(withFollowUp, true))).toBe(1);
+    });
+
+    it('текст всех ходов сохраняется целиком', () => {
+        const texts = prepareHistory(history(), true).flatMap(m => m.content.filter(b => b.type === 'text').map(b => b.text));
+        expect(texts).toEqual(['первый экран', 'ответ', 'второй экран', 'ответ']);
+    });
+
+    it('история без картинок не меняется', () => {
+        const plain = [{ role: 'user', content: [{ type: 'text', text: 'привет' }] }];
+        expect(prepareHistory(plain, true)).toEqual(plain);
+    });
+
+    it('пустая история не ломает разбор', () => {
+        expect(prepareHistory([], true)).toEqual([]);
     });
 });

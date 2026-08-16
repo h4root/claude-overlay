@@ -32,8 +32,12 @@ function createWindow() {
         alwaysOnTop: true,
         backgroundColor: '#00000000',
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
+            preload: path.join(__dirname, '../preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            // Песочный preload не умеет подключать локальные модули, а мост
+            // живёт именно в нём. Странице Node всё равно недоступен.
+            sandbox: false,
             backgroundThrottling: false,
             enableBlinkFeatures: 'GetDisplayMedia',
             webSecurity: true,
@@ -91,8 +95,12 @@ function createVoiceWindow() {
         show: false,
         backgroundColor: '#00000000',
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
+            preload: path.join(__dirname, '../preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            // Песочный preload не умеет подключать локальные модули, а мост
+            // живёт именно в нём. Странице Node всё равно недоступен.
+            sandbox: false,
             backgroundThrottling: false,
         },
     });
@@ -151,7 +159,15 @@ function createHintsWindow() {
         focusable: false,
         show: false,
         backgroundColor: '#00000000',
-        webPreferences: { nodeIntegration: true, contextIsolation: false, backgroundThrottling: false },
+        webPreferences: {
+            preload: path.join(__dirname, '../preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            // Песочный preload не умеет подключать локальные модули, а мост
+            // живёт именно в нём. Странице Node всё равно недоступен.
+            sandbox: false,
+            backgroundThrottling: false,
+        },
     });
 
     applyContentProtection(hintsWindow, true);

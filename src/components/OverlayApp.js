@@ -706,7 +706,6 @@ export class OverlayApp extends LitElement {
         this.displays = 1;
         this.pastSessions = [];
         this.unsubscribes = [];
-        this.savePreferenceSoon = null;
     }
 
     async connectedCallback() {
@@ -917,10 +916,7 @@ export class OverlayApp extends LitElement {
     setPreferenceSmooth(key, value) {
         this.preferences = { ...this.preferences, [key]: value };
         if (key === 'backgroundTransparency') this.applyTransparency();
-        if (!this.savePreferenceSoon) {
-            this.savePreferenceSoon = window.overlay.debounce((name, saved) => window.overlay.storage.updatePreference(name, saved), 300);
-        }
-        this.savePreferenceSoon(key, value);
+        window.overlay.storage.updatePreferenceSoon(key, value);
     }
 
     async onModelChange(value) {

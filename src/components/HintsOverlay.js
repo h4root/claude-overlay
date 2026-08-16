@@ -1,7 +1,5 @@
 import { LitElement, html, css } from '../assets/lit-core-2.7.4.min.js';
 
-const { ipcRenderer } = require('electron');
-
 // Показываем только то, что жмут во время встречи. Полный список живёт
 // на экране подготовки — здесь он был бы шумом поверх чужого окна.
 const SHOWN = ['capture', 'askVoice', 'toggleVisibility', 'toggleClickThrough', 'toggleHints'];
@@ -67,20 +65,14 @@ export class HintsOverlay extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        ipcRenderer.invoke('keybinds:get').then(loaded => {
-            this.keybinds = loaded.keybinds;
-        });
-        this.listener = () => {
-            ipcRenderer.invoke('keybinds:get').then(loaded => {
-                this.keybinds = loaded.keybinds;
-            });
-        };
-        ipcRenderer.on('keybinds:changed', this.listener);
+        const load = () => window.overlay.keybinds.load().then(loaded => (this.keybinds = loaded.keybinds));
+        load();
+        this.off = window.overlay.on('keybinds:changed', load);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        ipcRenderer.removeListener('keybinds:changed', this.listener);
+        if (this.off) this.off();
     }
 
     render() {
