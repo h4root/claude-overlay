@@ -3,7 +3,7 @@
 const { ipcRenderer } = require('electron');
 const audioCapture = require('./utils/audio-capture');
 const { buildHealth, overallState } = require('./utils/health');
-const { SessionCost, formatUsd } = require('./utils/pricing');
+const { SessionCost, formatUsd, costOf } = require('./utils/pricing');
 const keybindsModule = require('./utils/keybinds');
 const { debounce } = require('./utils/debounce');
 
@@ -105,11 +105,19 @@ const overlay = {
         total: () => sessionCost.total,
         reset: () => sessionCost.reset(),
         format: dollars => formatUsd(dollars),
+        of: (usage, model) => {
+            try {
+                return costOf(usage, model);
+            } catch {
+                // Модели ещё нет в таблице цен — показывать нечего, но и падать незачем.
+                return 0;
+            }
+        },
     },
 
     testKey: () => ipcRenderer.invoke('claude:test-key'),
     ask: payload => ipcRenderer.invoke('claude:ask', payload),
-    cancel: () => ipcRenderer.invoke('claude:cancel'),
+    cancel: (id = 'main') => ipcRenderer.invoke('claude:cancel', id),
     resetConversation: (id = 'main') => ipcRenderer.invoke('claude:reset', id),
 
     on(channel, handler) {

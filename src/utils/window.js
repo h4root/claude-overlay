@@ -5,9 +5,10 @@ const path = require('node:path');
 const storage = require('../storage');
 const { mergeKeybinds, defaultKeybinds } = require('./keybinds');
 const { purgeNow } = require('./whisper');
+const { clampToWorkArea } = require('./geometry');
 
 const SETUP_SIZE = { width: 760, height: 560 };
-const SESSION_SIZE = { width: 480, height: 380 };
+const SESSION_SIZE = { width: 520, height: 540 };
 const VOICE_SIZE = { width: 400, height: 300 };
 const HINTS_SIZE = { width: 240, height: 112 };
 const HINTS_MARGIN = 16;
@@ -176,6 +177,17 @@ function moveHints(hintsWindow, corner) {
     hintsWindow.setPosition(x, y);
 }
 
+// Окно не должно уезжать за край: оттуда его уже не достать ни мышью,
+// ни стрелками, потому что заголовка не видно.
+function keepOnScreen(targetWindow, dx = 0, dy = 0) {
+    if (!targetWindow || targetWindow.isDestroyed()) return;
+    const [x, y] = targetWindow.getPosition();
+    const [width, height] = targetWindow.getSize();
+    const { workArea } = screen.getDisplayNearestPoint({ x, y });
+    const next = clampToWorkArea({ x: x + dx, y: y + dy, width, height }, workArea);
+    targetWindow.setPosition(next.x, next.y);
+}
+
 // Единственное место, где меняется защита: иначе флаг для индикатора
 // незаметно разъезжается с реальным состоянием окна.
 function applyContentProtection(targetWindow, enabled) {
@@ -197,8 +209,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
     const move = (dx, dy) => () => {
         if (!mainWindow.isVisible()) return;
-        const [x, y] = mainWindow.getPosition();
-        mainWindow.setPosition(x + dx * step, y + dy * step);
+        keepOnScreen(mainWindow, dx * step, dy * step);
     };
 
     const actions = {
@@ -217,6 +228,9 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             if (mainWindow.isVisible()) {
                 mainWindow.hide();
             } else {
+                // Экран мог смениться, пока окно было скрыто: возвращаем его
+                // в видимую область до показа.
+                keepOnScreen(mainWindow);
                 // showInactive: фокус остаётся в приложении, поверх которого висит оверлей.
                 mainWindow.showInactive();
             }
@@ -273,6 +287,7 @@ function setupWindowIpcHandlers(mainWindow) {
         if (mainWindow.isDestroyed()) return;
         const size = mode === 'session' ? SESSION_SIZE : SETUP_SIZE;
         mainWindow.setSize(size.width, size.height, true);
+        keepOnScreen(mainWindow);
     });
 
     ipcMain.handle('window:content-protected', () => contentProtected);

@@ -65,7 +65,8 @@ export class OverlayApp extends LitElement {
         hasApiKey: { state: true },
         apiKeyDraft: { state: true },
         keyCheck: { state: true },
-        answer: { state: true },
+        turns: { state: true },
+        lastRequest: { state: true },
         status: { state: true },
         error: { state: true },
         listening: { state: true },
@@ -418,6 +419,50 @@ export class OverlayApp extends LitElement {
                 color: var(--danger);
                 font-size: var(--font-size-sm);
             }
+
+            .turn {
+                margin-bottom: 12px;
+            }
+            .turn.user {
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                padding: 7px 9px;
+                border-radius: 9px;
+                background: rgba(255, 255, 255, 0.05);
+            }
+            .turn.user .said {
+                flex: 1;
+                min-width: 0;
+                font-size: var(--font-size-sm);
+                color: var(--text-secondary);
+            }
+            /* Миниатюра отвечает на вопрос «он вообще тот экран снял?». */
+            .turn.user .shot {
+                width: 84px;
+                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                flex: 0 0 auto;
+            }
+            .turn .chip {
+                display: inline-block;
+                margin-right: 5px;
+                padding: 0 5px;
+                border-radius: 4px;
+                background: rgba(255, 255, 255, 0.1);
+                color: var(--text-muted);
+                font-size: 10px;
+            }
+            .turn .muted {
+                color: var(--text-muted);
+            }
+            .turn .meta {
+                margin-top: 4px;
+                color: var(--text-muted);
+                font-size: 10px;
+                font-family: var(--font-mono);
+            }
+
             .cost {
                 flex: 0 0 auto;
                 color: var(--text-muted);
@@ -517,7 +562,8 @@ export class OverlayApp extends LitElement {
         this.hasApiKey = false;
         this.apiKeyDraft = '';
         this.keyCheck = null;
-        this.answer = '';
+        this.turns = [];
+        this.lastRequest = null;
         this.status = 'idle';
         this.error = '';
         this.listening = false;
@@ -604,22 +650,28 @@ export class OverlayApp extends LitElement {
                 this.downloading = { ...this.downloading, [payload.id]: payload.percent };
             }),
             on('claude:start', () => {
-                this.answer = '';
                 this.error = '';
                 this.status = 'busy';
+                this.turns = [...this.turns, { role: 'assistant', text: '', model: this.config.model }];
+                this.scrollToBottom();
             }),
             on('claude:delta', delta => {
-                this.answer += delta;
+                this.patchLastTurn(turn => ({ text: turn.text + delta }));
                 this.scrollToBottom();
             }),
             on('claude:done', payload => {
                 this.status = 'idle';
                 window.overlay.cost.add(payload.usage, payload.model);
                 this.cost = { ...window.overlay.cost.total() };
+                this.patchLastTurn(() => ({
+                    model: payload.model,
+                    dollars: window.overlay.cost.of(payload.usage, payload.model),
+                }));
             }),
             on('claude:error', payload => {
                 this.status = 'idle';
-                this.error = payload.message;
+                this.patchLastTurn(turn => (turn.role === 'assistant' && !turn.text ? { failed: payload.message } : {}));
+                this.scrollToBottom();
             }),
         ];
 
@@ -662,6 +714,31 @@ export class OverlayApp extends LitElement {
     scrollAnswer(delta) {
         const main = this.renderRoot.querySelector('main');
         if (main) main.scrollBy({ top: delta, behavior: 'smooth' });
+    }
+
+    patchLastTurn(patch) {
+        if (!this.turns.length) return;
+        const last = this.turns.at(-1);
+        this.turns = [...this.turns.slice(0, -1), { ...last, ...patch(last) }];
+    }
+
+    // Кадр в ленте нужен только чтобы узнать свой экран, поэтому храним
+    // уменьшенную копию: полный base64 на каждый ход раздувает память.
+    async makeThumb(image) {
+        try {
+            const picture = new Image();
+            picture.src = `data:${image.mediaType};base64,${image.data}`;
+            await picture.decode();
+            const width = 220;
+            const height = Math.max(1, Math.round((picture.height * width) / picture.width));
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(picture, 0, 0, width, height);
+            return canvas.toDataURL('image/jpeg', 0.6);
+        } catch {
+            return null;
+        }
     }
 
     scrollToBottom() {
@@ -857,19 +934,37 @@ export class OverlayApp extends LitElement {
             field.value = '';
         }
 
+        let image;
         try {
-            const image = await window.overlay.captureScreen();
+            image = await window.overlay.captureScreen();
             this.screenOk = true;
-            await window.overlay.ask({
-                images: [image],
-                prompt,
-                useTranscript: Boolean(this.preferences.transcriptWithScreenshot),
-            });
         } catch (error) {
             this.screenOk = false;
             this.status = 'idle';
             this.error = error.message;
+            return;
         }
+
+        const payload = { images: [image], prompt, useTranscript: Boolean(this.preferences.transcriptWithScreenshot) };
+        this.lastRequest = payload;
+        this.turns = [...this.turns, { role: 'user', text: prompt, thumb: await this.makeThumb(image) }];
+        await window.overlay.ask(payload);
+    }
+
+    // Повтор берёт тот же кадр: пересъёмка стоит денег и ловит уже другой
+    // экран, а модель к этому моменту могли сменить в шапке.
+    async retry() {
+        if (!this.lastRequest) return;
+        this.status = 'busy';
+        this.error = '';
+        this.turns = [...this.turns, { role: 'user', repeat: true, text: this.lastRequest.prompt }];
+        await window.overlay.ask(this.lastRequest);
+    }
+
+    async cancel() {
+        await window.overlay.cancel('main');
+        this.status = 'idle';
+        this.patchLastTurn(turn => (turn.role === 'assistant' && !turn.text ? { failed: 'Отменено' } : {}));
     }
 
     // Ответ по речи уходит в отдельное окно: основной чат по экрану он не
@@ -886,14 +981,18 @@ export class OverlayApp extends LitElement {
         if (!text) return;
         input.value = '';
         this.status = 'busy';
-        await window.overlay.ask({ prompt: text });
+        const payload = { prompt: text };
+        this.lastRequest = payload;
+        this.turns = [...this.turns, { role: 'user', text }];
+        await window.overlay.ask(payload);
     }
 
     async newSession() {
         await window.overlay.resetConversation();
         window.overlay.cost.reset();
         this.cost = { ...window.overlay.cost.total() };
-        this.answer = '';
+        this.turns = [];
+        this.lastRequest = null;
         this.error = '';
         this.transcriptText = '';
         this.status = 'idle';
@@ -901,7 +1000,8 @@ export class OverlayApp extends LitElement {
 
     async wipe() {
         await window.overlay.resetConversation();
-        this.answer = '';
+        this.turns = [];
+        this.lastRequest = null;
         this.transcriptText = '';
     }
 
@@ -966,6 +1066,33 @@ export class OverlayApp extends LitElement {
         ></span>`;
     }
 
+    renderTurn(turn) {
+        if (turn.role === 'user') {
+            return html`<div class="turn user">
+                ${turn.thumb ? html`<img class="shot" src=${turn.thumb} alt="Отправленный кадр" />` : ''}
+                <div class="said">
+                    ${turn.repeat ? html`<span class="chip">повтор того же кадра</span>` : ''}
+                    ${turn.text || html`<span class="muted">вопрос по экрану</span>`}
+                </div>
+            </div>`;
+        }
+
+        return html`<div class="turn assistant">
+            ${
+                turn.failed
+                    ? html`<div class="error">${turn.failed}</div>`
+                    : turn.text
+                      ? this.renderMarkdown(turn.text)
+                      : html`<span class="muted">думает…</span>`
+            }
+            ${
+                turn.text && !turn.failed
+                    ? html`<div class="meta">${turn.model}${turn.dollars ? html` · ${window.overlay.cost.format(turn.dollars)}` : ''}</div>`
+                    : ''
+            }
+        </div>`;
+    }
+
     renderTranscriptStrip() {
         if (this.transcriptError) {
             return html`<div class="transcript"><span class="tag">звук:</span><span class="body">${this.transcriptError}</span></div>`;
@@ -1016,12 +1143,12 @@ export class OverlayApp extends LitElement {
             ${this.healthOpen ? this.renderHealthPopover() : ''}
 
             <main class=${this.preferences.fontSize || 'medium'}>
-                ${this.error ? html`<div class="error">${this.error}</div>` : ''}
                 ${
-                    this.answer
-                        ? this.renderMarkdown(this.answer)
+                    this.turns.length
+                        ? this.turns.map(turn => this.renderTurn(turn))
                         : html`<div class="empty">Пусто. ${this.keybinds.capture} снимет экран и спросит Claude.</div>`
                 }
+                ${this.error ? html`<div class="error">${this.error}</div>` : ''}
             </main>
 
             ${this.renderTranscriptStrip()}
@@ -1032,6 +1159,17 @@ export class OverlayApp extends LitElement {
                     placeholder="Свой вопрос — Enter отправит без экрана"
                     @keydown=${event => event.key === 'Enter' && this.askFollowUp(event)}
                 />
+                ${
+                    this.status === 'busy'
+                        ? html`<button @click=${this.cancel} title="Прервать ответ">Стоп</button>`
+                        : html`<button
+                              @click=${this.retry}
+                              ?disabled=${!this.lastRequest}
+                              title="Тот же кадр и вопрос — можно сменить модель в шапке"
+                          >
+                              Повторить
+                          </button>`
+                }
                 <button class="primary" @click=${this.capture} ?disabled=${this.status === 'busy'}>Снять экран</button>
             </footer>
         `;
